@@ -213,13 +213,15 @@ function initDashboardPage() {
   });
   post.requestButton.addEventListener("click", async () => {
     syncGenerationImageIds();
-    if (state.post.clearOnSubmit) {
+    renderRequestSection("post", post);
+    const status = await submitRequestSection("post", post, false);
+    if (state.post.clearOnSubmit && status === 200) {
       state.selectedImageIds = [];
       syncGenerationImageIds();
+      saveState();
+      renderRequestSection("post", post);
       renderGallery(gallery);
     }
-    renderRequestSection("post", post);
-    await submitRequestSection("post", post, false);
   });
 
   send.formatButton.addEventListener("click", () => formatBody("send", send));
@@ -294,13 +296,15 @@ function initGalleryPage() {
 
   post.requestButton.addEventListener("click", async () => {
     syncGenerationImageIds();
-    if (state.post.clearOnSubmit) {
+    renderRequestSection("post", post);
+    const status = await submitRequestSection("post", post, false);
+    if (state.post.clearOnSubmit && status === 200) {
       state.selectedImageIds = [];
       syncGenerationImageIds();
+      saveState();
+      renderRequestSection("post", post);
       renderGallery(gallery);
     }
-    renderRequestSection("post", post);
-    await submitRequestSection("post", post, false);
   });
 
   post.formatButton.addEventListener("click", () => {
@@ -610,10 +614,12 @@ async function submitRequestSection(key, section, updateGallery) {
       state.galleryItems = flattenTasks(json?.data?.tasks ?? []);
       saveState();
     }
+    return response.status;
   } catch (error) {
     setResponse(key, `Request 失敗: ${error.message}`);
     renderRequestSection(key, section);
     section.responseFold.open = false;
+    return null;
   }
 }
 
