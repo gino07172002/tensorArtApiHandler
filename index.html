@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tensor API QA Console | Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-page="dashboard">
+  <div class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Pure Frontend QA Tool</p>
+        <h1>API Dashboard</h1>
+        <p class="hero-copy">先解析 API / PowerShell，再編輯 Body、送出 Request，最後查看 Response。</p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" id="export-storage" class="ghost-button">匯出設定</button>
+        <button type="button" id="import-storage" class="ghost-button">匯入設定</button>
+        <button type="button" id="clear-storage" class="ghost-button">清除 localStorage</button>
+        <input id="import-storage-file" type="file" accept="application/json" hidden>
+      </div>
+    </header>
+
+    <nav class="page-nav">
+      <a class="page-link is-active" href="./index.html">Dashboard</a>
+      <a class="page-link" href="./metadata.html">Metadata</a>
+    </nav>
+
+    <section class="warning-panel">
+      <strong>注意</strong>
+      <p>此工具在瀏覽器直接送出請求，仍受 Cookie、CORS 與簽名網址有效期限影響。</p>
+    </section>
+
+    <main class="stack-layout">
+      <section class="api-grid">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">API 1</p>
+              <h2>Send Request</h2>
+            </div>
+            <div class="button-row compact-row">
+              <select id="send-preset-select" class="field-input" style="padding: 0.25rem; font-size: 0.875rem; width: auto;">
+                <option value="">-- 未儲存的草稿 --</option>
+              </select>
+              <button type="button" id="send-preset-save" class="ghost-button">儲存</button>
+              <button type="button" id="send-preset-saveas" class="ghost-button">另存為</button>
+              <button type="button" id="send-preset-delete" class="ghost-button" style="color: #ef4444;">刪除</button>
+            </div>
+          </div>
+
+          <label class="field" style="margin-bottom: 1rem;">
+            <span>PowerShell 內容 (貼上後點擊解析)</span>
+            <textarea id="send-powershell" rows="5"></textarea>
+            <div class="button-row" style="margin-top: 0.5rem; justify-content: flex-start;">
+              <button type="button" id="send-parse" class="ghost-button">解析 PowerShell</button>
+            </div>
+          </label>
+
+          <details id="send-source-fold" class="editor-fold request-source-fold">
+            <summary id="send-source-summary">API 詳細設定</summary>
+            <div class="fold-body">
+              <div class="inline-grid">
+                <label class="field">
+                  <span>URL</span>
+                  <input id="send-url" type="text">
+                </label>
+                <label class="field">
+                  <span>Method</span>
+                  <input id="send-method" type="text">
+                </label>
+              </div>
+              <label class="field">
+                <span>Headers</span>
+                <textarea id="send-headers" rows="8"></textarea>
+              </label>
+            </div>
+          </details>
+
+          <div class="button-row">
+            <button type="button" id="send-request" class="primary-button">送出 API</button>
+          </div>
+
+          <label class="field">
+            <span>可編輯 Body</span>
+            <textarea id="send-body" rows="12"></textarea>
+          </label>
+          <div class="button-row">
+            <button type="button" id="send-format" class="ghost-button">格式化 Body</button>
+          </div>
+          <label class="field">
+            <span>Response</span>
+            <details id="send-response-fold" class="response-fold">
+              <summary id="send-response-summary">回應預覽</summary>
+              <pre id="send-response" class="response-box"></pre>
+            </details>
+          </label>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">API 2</p>
+              <h2>Query Tasks</h2>
+            </div>
+            <div class="button-row compact-row">
+              <select id="query-preset-select" class="field-input" style="padding: 0.25rem; font-size: 0.875rem; width: auto;">
+                <option value="">-- 未儲存的草稿 --</option>
+              </select>
+              <button type="button" id="query-preset-save" class="ghost-button">儲存</button>
+              <button type="button" id="query-preset-saveas" class="ghost-button">另存為</button>
+              <button type="button" id="query-preset-delete" class="ghost-button" style="color: #ef4444;">刪除</button>
+            </div>
+          </div>
+
+          <label class="field" style="margin-bottom: 1rem;">
+            <span>PowerShell 內容 (貼上後點擊解析)</span>
+            <textarea id="query-powershell" rows="5"></textarea>
+            <div class="button-row" style="margin-top: 0.5rem; justify-content: flex-start;">
+              <button type="button" id="query-parse" class="ghost-button">解析 PowerShell</button>
+            </div>
+          </label>
+
+          <details id="query-source-fold" class="editor-fold request-source-fold">
+            <summary id="query-source-summary">API 詳細設定</summary>
+            <div class="fold-body">
+              <div class="inline-grid">
+                <label class="field">
+                  <span>URL</span>
+                  <input id="query-url" type="text">
+                </label>
+                <label class="field">
+                  <span>Method</span>
+                  <input id="query-method" type="text">
+                </label>
+              </div>
+              <label class="field">
+                <span>Headers</span>
+                <textarea id="query-headers" rows="8"></textarea>
+              </label>
+            </div>
+          </details>
+
+          <div class="button-row">
+            <button type="button" id="query-request" class="primary-button">送出 API</button>
+          </div>
+
+          <label class="field">
+            <span>可編輯 Body</span>
+            <textarea id="query-body" rows="12"></textarea>
+          </label>
+          <div class="button-row">
+            <button type="button" id="query-format" class="ghost-button">格式化 Body</button>
+          </div>
+          <label class="field">
+            <span>Response</span>
+            <details id="query-response-fold" class="response-fold">
+              <summary id="query-response-summary">回應預覽</summary>
+              <pre id="query-response" class="response-box"></pre>
+            </details>
+          </label>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">API 3</p>
+              <h2>Create Post</h2>
+            </div>
+            <div class="button-row compact-row">
+              <select id="post-preset-select" class="field-input" style="padding: 0.25rem; font-size: 0.875rem; width: auto;">
+                <option value="">-- 未儲存的草稿 --</option>
+              </select>
+              <button type="button" id="post-preset-save" class="ghost-button">儲存</button>
+              <button type="button" id="post-preset-saveas" class="ghost-button">另存為</button>
+              <button type="button" id="post-preset-delete" class="ghost-button" style="color: #ef4444;">刪除</button>
+              <button type="button" id="post-clear-ids" class="ghost-button">清空圖片 ID</button>
+            </div>
+          </div>
+
+          <div class="meta-strip">
+            <span>已選取圖片數</span>
+            <strong id="selected-count">0</strong>
+          </div>
+
+          <label class="field" style="margin-bottom: 1rem;">
+            <span>PowerShell 內容 (貼上後點擊解析)</span>
+            <textarea id="post-powershell" rows="5"></textarea>
+            <div class="button-row" style="margin-top: 0.5rem; justify-content: flex-start;">
+              <button type="button" id="post-parse" class="ghost-button">解析 PowerShell</button>
+            </div>
+          </label>
+
+          <details id="post-source-fold" class="editor-fold request-source-fold">
+            <summary id="post-source-summary">API 詳細設定</summary>
+            <div class="fold-body">
+              <div class="inline-grid">
+                <label class="field">
+                  <span>URL</span>
+                  <input id="post-url" type="text">
+                </label>
+                <label class="field">
+                  <span>Method</span>
+                  <input id="post-method" type="text">
+                </label>
+              </div>
+              <label class="field">
+                <span>Headers</span>
+                <textarea id="post-headers" rows="8"></textarea>
+              </label>
+            </div>
+          </details>
+
+          <div class="button-row" style="align-items: center; gap: 1rem;">
+            <button type="button" id="post-request" class="primary-button">送出 API</button>
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer;">
+              <input type="checkbox" id="post-clear-on-submit">
+              送出前清空 generationImageIds 為空陣列 []
+            </label>
+          </div>
+
+          <label class="field">
+            <span>可編輯 Body</span>
+            <textarea id="post-body" rows="12"></textarea>
+          </label>
+          <div class="button-row">
+            <button type="button" id="post-format" class="ghost-button">格式化 Body</button>
+          </div>
+          <label class="field">
+            <span>Response</span>
+            <details id="post-response-fold" class="response-fold">
+              <summary id="post-response-summary">回應預覽</summary>
+              <pre id="post-response" class="response-box"></pre>
+            </details>
+          </label>
+        </section>
+      </section>
+
+      <section class="panel panel-wide">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Gallery</p>
+            <h2>Query Results</h2>
+          </div>
+        </div>
+        <div id="gallery-stats" class="gallery-stats">目前沒有查詢結果。</div>
+        <div id="gallery" class="gallery"></div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
