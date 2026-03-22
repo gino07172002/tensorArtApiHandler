@@ -176,8 +176,8 @@ function initDashboardPage() {
   const gallery = {
     stats: document.querySelector("#gallery-stats"),
     root: document.querySelector("#gallery"),
-    selectedCount: document.querySelector("#selected-count"),
-    postClearIds: document.querySelector("#post-clear-ids"),
+    selectedCount: document.querySelectorAll(".selected-count"),
+    postClearIds: document.querySelectorAll(".post-clear-ids"),
   };
 
   renderRequestSection("send", send);
@@ -226,12 +226,14 @@ function initDashboardPage() {
   query.formatButton.addEventListener("click", () => formatBody("query", query));
   post.formatButton.addEventListener("click", () => formatBody("post", post));
 
-  gallery.postClearIds?.addEventListener("click", () => {
-    state.selectedImageIds = [];
-    syncGenerationImageIds();
-    saveState();
-    renderRequestSection("post", post);
-    renderGallery(gallery);
+  document.querySelectorAll(".post-clear-ids").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.selectedImageIds = [];
+      syncGenerationImageIds();
+      saveState();
+      renderRequestSection("post", post);
+      renderGallery(gallery);
+    });
   });
 }
 
@@ -241,8 +243,8 @@ function initGalleryPage() {
   const gallery = {
     stats: document.querySelector("#gallery-stats"),
     root: document.querySelector("#gallery"),
-    selectedCount: document.querySelector("#selected-count"),
-    postClearIds: document.querySelector("#post-clear-ids"),
+    selectedCount: document.querySelectorAll(".selected-count"),
+    postClearIds: document.querySelectorAll(".post-clear-ids"),
   };
 
   renderRequestSection("query", query);
@@ -314,12 +316,14 @@ function initGalleryPage() {
     renderGallery(gallery);
   });
 
-  gallery.postClearIds?.addEventListener("click", () => {
-    state.selectedImageIds = [];
-    syncGenerationImageIds();
-    saveState();
-    renderRequestSection("post", post);
-    renderGallery(gallery);
+  document.querySelectorAll(".post-clear-ids").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.selectedImageIds = [];
+      syncGenerationImageIds();
+      saveState();
+      renderRequestSection("post", post);
+      renderGallery(gallery);
+    });
   });
 
   bindSectionInputs("query", query);
@@ -648,7 +652,7 @@ function syncGenerationImageIds() {
 }
 
 function renderGallery(dom) {
-  dom.selectedCount.textContent = String(state.selectedImageIds.length);
+  dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
 
   if (!state.galleryItems.length) {
     dom.stats.textContent = "目前沒有查詢結果。";
@@ -677,8 +681,6 @@ function renderGallery(dom) {
           </div>
           <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
           <div class="gallery-actions">
-            <button type="button" data-action="download-original" data-index="${index}">另存原圖</button>
-            <button type="button" data-action="download-jpg" data-index="${index}">另存為 JPG</button>
             <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
           </div>
         </div>
@@ -735,25 +737,34 @@ function convertBlobToJpeg(blob) {
 function extractBlobFromImageElement(imgElement, targetMimeType) {
   return new Promise((resolve, reject) => {
     try {
-      if (!imgElement || !imgElement.complete || imgElement.naturalHeight === 0) {
+      if (!imgElement || !imgElement.src) {
         reject(new Error("圖片尚未載入或無法存取"));
         return;
       }
-      const canvas = document.createElement("canvas");
-      canvas.width = imgElement.naturalWidth || imgElement.width;
-      canvas.height = imgElement.naturalHeight || imgElement.height;
-      const ctx = canvas.getContext("2d");
-      
-      if (targetMimeType === "image/jpeg" || targetMimeType === "image/jpg") {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
-      ctx.drawImage(imgElement, 0, 0);
-      
-      canvas.toBlob((blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error("無法從 Canvas 取得影像資料"));
-      }, targetMimeType, 0.95);
+      // 建立新的 Image 物件並設定 crossorigin，避免汙染 gallery 中的原始 img
+      const corsImg = new Image();
+      corsImg.crossOrigin = "anonymous";
+      corsImg.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = corsImg.naturalWidth || corsImg.width;
+          canvas.height = corsImg.naturalHeight || corsImg.height;
+          const ctx = canvas.getContext("2d");
+          if (targetMimeType === "image/jpeg" || targetMimeType === "image/jpg") {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          ctx.drawImage(corsImg, 0, 0);
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("無法從 Canvas 取得影像資料"));
+          }, targetMimeType, 0.95);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      corsImg.onerror = () => reject(new Error("以 CORS 模式載入圖片失敗"));
+      corsImg.src = imgElement.src;
     } catch (e) {
       reject(e);
     }
@@ -825,14 +836,7 @@ async function handleGalleryAction(action, index, dom) {
     dom.stats.textContent = `已完成另存新檔：${suggestedFileName}`;
   } catch (error) {
     if (error.name === "AbortError") return;
-    
-    // 如果是 HTTP 狀態碼錯誤或連結過期，切勿使用直接下載以免載下 XML 錯誤頁面
-    if (error.message.includes("HTTP") || error.message.includes("已過期") || error.message.includes("403") || error.message.includes("404")) {
-      dom.stats.textContent = `無法下載：${error.message} (建議重新 Query API 取得新連結)`;
-    } else {
-      directBrowserDownload(entry.url, originalFileName);
-      dom.stats.textContent = `轉檔/存檔失敗，已改用瀏覽器直接下載：${error.message}`;
-    }
+    dom.stats.textContent = `無法下載：${error.message} (建議重新 Query API 取得新連結)`;
   }
 }
 function parsePowerShellRequest(text) {

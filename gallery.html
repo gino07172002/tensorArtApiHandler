@@ -104,6 +104,10 @@
             <p class="eyebrow">Gallery</p>
             <h2>Query Results</h2>
           </div>
+          <div class="button-row compact-row" style="align-items: center;">
+            <span style="font-size: 0.875rem;">已選取 <strong class="selected-count">0</strong> 張</span>
+            <button type="button" class="ghost-button post-clear-ids">清空圖片 ID</button>
+          </div>
         </div>
         <div id="gallery-stats" class="gallery-stats">目前沒有查詢結果。</div>
         <div id="gallery" class="gallery"></div>
@@ -122,13 +126,7 @@
             <button type="button" id="post-preset-save" class="ghost-button">儲存</button>
             <button type="button" id="post-preset-saveas" class="ghost-button">另存為</button>
             <button type="button" id="post-preset-delete" class="ghost-button" style="color: #ef4444;">刪除</button>
-            <button type="button" id="post-clear-ids" class="ghost-button">清空圖片 ID</button>
           </div>
-        </div>
-
-        <div class="meta-strip">
-          <span>已選取圖片數</span>
-          <strong id="selected-count">0</strong>
         </div>
 
         <label class="field" style="margin-bottom: 1rem;">
@@ -159,12 +157,14 @@
           </div>
         </details>
 
-        <div class="button-row" style="align-items: center; gap: 1rem;">
+        <div class="button-row" style="align-items: center; gap: 1rem; flex-wrap: wrap;">
           <button type="button" id="post-request" class="primary-button">送出 Post</button>
           <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer;">
             <input type="checkbox" id="post-clear-on-submit">
             送出前清空 generationImageIds 為空陣列 []
           </label>
+          <span style="font-size: 0.875rem;">已選取 <strong class="selected-count">0</strong> 張</span>
+          <button type="button" class="ghost-button post-clear-ids">清空圖片 ID</button>
         </div>
 
         <label class="field">
