@@ -90,6 +90,31 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function cloneRequestDraft(request) {
+  return { ...blankRequestState(), ...JSON.parse(JSON.stringify(request || {})) };
+}
+
+function normalizeSavedSettings(savedSettings) {
+  const source = savedSettings || {};
+  return {
+    send: Array.isArray(source.send) ? source.send : [],
+    query: Array.isArray(source.query) ? source.query : [],
+    post: Array.isArray(source.post) ? source.post : [],
+  };
+}
+
+function buildSnapshotData(source) {
+  return {
+    send: cloneRequestDraft(source.send),
+    query: cloneRequestDraft(source.query),
+    post: cloneRequestDraft(source.post),
+    selectedImageIds: Array.isArray(source.selectedImageIds) ? [...source.selectedImageIds] : [],
+    galleryItems: Array.isArray(source.galleryItems) ? JSON.parse(JSON.stringify(source.galleryItems)) : [],
+    importedMetadata: source.importedMetadata ?? null,
+    savedSettings: normalizeSavedSettings(source.savedSettings),
+  };
+}
+
 function bindCommonControls() {
   const exportButton = document.querySelector("#export-storage");
   const importButton = document.querySelector("#import-storage");
@@ -103,10 +128,12 @@ function bindCommonControls() {
 }
 
 function exportStorageSnapshot() {
+  const data = buildSnapshotData(state);
   const payload = {
     exportedAt: new Date().toISOString(),
     storageKey: STORAGE_KEY,
-    data: state,
+    snapshotVersion: 2,
+    data,
   };
   triggerDownload(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `tensor-api-qa-${timestamp()}.json`);
 }
@@ -117,14 +144,14 @@ async function importStorageSnapshot(event) {
 
   try {
     const parsed = JSON.parse(await file.text());
-    const incoming = parsed.data ?? parsed;
-    Object.assign(state.send, { ...blankRequestState(), ...(incoming.send || {}) });
-    Object.assign(state.query, { ...blankRequestState(), ...(incoming.query || {}) });
-    Object.assign(state.post, { ...blankRequestState(), ...(incoming.post || {}) });
-    state.selectedImageIds = Array.isArray(incoming.selectedImageIds) ? incoming.selectedImageIds : [];
-    state.galleryItems = Array.isArray(incoming.galleryItems) ? incoming.galleryItems : [];
-    state.importedMetadata = incoming.importedMetadata ?? null;
-    state.savedSettings = incoming.savedSettings || { send: [], query: [], post: [] };
+    const incoming = buildSnapshotData(parsed.data ?? parsed);
+    Object.assign(state.send, incoming.send);
+    Object.assign(state.query, incoming.query);
+    Object.assign(state.post, incoming.post);
+    state.selectedImageIds = incoming.selectedImageIds;
+    state.galleryItems = incoming.galleryItems;
+    state.importedMetadata = incoming.importedMetadata;
+    state.savedSettings = incoming.savedSettings;
     saveState();
     location.reload();
   } finally {
