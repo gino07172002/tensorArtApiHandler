@@ -879,15 +879,15 @@ function parsePowerShellRequest(text) {
 
   const url = capture(text, /-Uri\s+"([\s\S]*?)"\s*`?\s*-Method/i);
   const method = capture(text, /-Method\s+"([^"]+)"/i);
-  const bodyRaw = captureOptional(text, /-Body\s+"([\s\S]*?)"\s*$/i);
   const headersBlock = captureOptional(text, /-Headers\s+@\{([\s\S]*?)\}\s*`?\s*-ContentType/i);
+  const bodyLiteral = extractPowerShellBodyLiteral(text);
 
   return {
     powershell: text,
     url: decodePowerShellString(url),
     method: decodePowerShellString(method).toUpperCase(),
     headers: sanitizeHeaders(parseHeaderBlock(headersBlock || "")),
-    bodyText: decodePowerShellString(bodyRaw || ""),
+    bodyText: decodePowerShellQuotedString(bodyLiteral.value, bodyLiteral.quote),
   };
 }
 
@@ -922,6 +922,81 @@ function captureOptional(text, pattern) {
   return match ? match[1] : "";
 }
 
+function extractPowerShellBodyLiteral(text) {
+  const bodyMatch = /-Body\b/i.exec(text);
+  if (!bodyMatch) {
+    return { value: "", quote: "\"" };
+  }
+
+  const segment = text.slice(bodyMatch.index + bodyMatch[0].length);
+  const literal = findFirstPowerShellStringLiteral(segment);
+  return literal || { value: "", quote: "\"" };
+}
+
+function findFirstPowerShellStringLiteral(text) {
+  for (let index = 0; index < text.length; index += 1) {
+    const quote = text[index];
+    if (quote !== "\"" && quote !== "'") {
+      continue;
+    }
+
+    const literal = quote === "\""
+      ? readDoubleQuotedPowerShellString(text, index)
+      : readSingleQuotedPowerShellString(text, index);
+
+    if (literal) {
+      return literal;
+    }
+  }
+
+  return null;
+}
+
+function readDoubleQuotedPowerShellString(text, startIndex) {
+  let index = startIndex + 1;
+
+  while (index < text.length) {
+    const char = text[index];
+    if (char === "`") {
+      index += 2;
+      continue;
+    }
+
+    if (char === "\"") {
+      return {
+        value: text.slice(startIndex + 1, index),
+        quote: "\"",
+      };
+    }
+
+    index += 1;
+  }
+
+  return null;
+}
+
+function readSingleQuotedPowerShellString(text, startIndex) {
+  let index = startIndex + 1;
+
+  while (index < text.length) {
+    if (text[index] === "'" && text[index + 1] === "'") {
+      index += 2;
+      continue;
+    }
+
+    if (text[index] === "'") {
+      return {
+        value: text.slice(startIndex + 1, index),
+        quote: "'",
+      };
+    }
+
+    index += 1;
+  }
+
+  return null;
+}
+
 function decodePowerShellString(value) {
   return value
     .replace(/`"/g, "\"")
@@ -929,6 +1004,14 @@ function decodePowerShellString(value) {
     .replace(/`r/g, "\r")
     .replace(/`n/g, "\n")
     .replace(/`\$/g, "$");
+}
+
+function decodePowerShellQuotedString(value, quote = "\"") {
+  if (quote === "'") {
+    return value.replace(/''/g, "'");
+  }
+
+  return decodePowerShellString(value);
 }
 
 function formatJsonString(text) {
