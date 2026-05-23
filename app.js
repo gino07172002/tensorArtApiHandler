@@ -1462,7 +1462,7 @@ function buildCanvasEditorRequestDraft(input) {
     return {
       url: "https://api.tensor.art/works/v1/works/task_by_image",
       method: "POST",
-      contentType: "text/plain;charset=UTF-8",
+      contentType: "application/json",
       body: {
         params,
         credits: castNumber(input.credits, 3.66),
@@ -1497,17 +1497,22 @@ function getCanvasInheritedHeaders() {
 
 async function sendCanvasRequest(editor, dom) {
   const draft = buildCanvasEditorDraftFromDom(editor, dom);
-  const headers = {
-    ...getCanvasInheritedHeaders(),
-    "content-type": draft.contentType,
-  };
+  const inheritedSource = [state.send.headers, state.query.headers, state.post.headers]
+    .find((headers) => headers && Object.keys(headers).length) || {};
+  const baseHeaders = sanitizeHeaders(inheritedSource);
 
-  if (!Object.keys(getCanvasInheritedHeaders()).length) {
+  if (!Object.keys(baseHeaders).length) {
     dom.stats.textContent = "找不到可用的 headers。請先在 Dashboard 貼一次 PowerShell 來繼承授權 cookie。";
     dom.responseFold.open = true;
     dom.response.textContent = "尚未送出：缺少 headers (authorization / cookie 等)。";
     return;
   }
+
+  const headers = { ...baseHeaders };
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === "content-type") delete headers[key];
+  }
+  headers["content-type"] = draft.contentType;
 
   dom.send.disabled = true;
   dom.responseFold.open = true;
@@ -1526,7 +1531,7 @@ async function sendCanvasRequest(editor, dom) {
     dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}`;
     dom.stats.textContent = `已送出 (HTTP ${response.status})`;
   } catch (error) {
-    dom.response.textContent = `Request 失敗: ${error.message}`;
+    dom.response.textContent = `Request 失敗: ${error.message}\n\nCORS 提示：\n- 確認瀏覽器擴充對 api.tensor.art 放行（含 OPTIONS preflight）\n- 改用「Apply to API 1」把 body 套到 Dashboard 後在那邊送`;
     dom.stats.textContent = `送出失敗: ${error.message}`;
   } finally {
     dom.send.disabled = false;
