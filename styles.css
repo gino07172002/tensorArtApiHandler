@@ -404,31 +404,40 @@ button:hover {
 }
 
 .canvas-shell {
-  width: min(1600px, calc(100vw - 24px));
+  width: min(1740px, calc(100vw - 20px));
 }
 
 .canvas-hero {
-  border-radius: 24px;
+  border-radius: 18px;
 }
 
 .canvas-workbench {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 360px;
+  grid-template-columns: 240px minmax(640px, 1fr) 380px;
   gap: 16px;
-  margin-top: 20px;
+  margin-top: 16px;
   align-items: start;
 }
 
 .canvas-toolbar,
 .canvas-inspector {
   position: sticky;
-  top: 16px;
+  top: 14px;
   display: grid;
   gap: 14px;
+  align-self: start;
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+}
+
+.canvas-toolbar .field,
+.canvas-inspector .field {
+  margin-bottom: 0;
 }
 
 .canvas-stage-panel {
   min-width: 0;
+  min-height: calc(100vh - 230px);
 }
 
 .canvas-status {
@@ -453,11 +462,12 @@ button:hover {
 
 .tool-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
 .tool-button {
+  width: 100%;
   min-height: 38px;
   padding: 8px 10px;
   border-radius: 10px;
@@ -478,8 +488,29 @@ button:hover {
   margin-top: 14px;
 }
 
+.canvas-toolbar input[type="file"] {
+  min-height: 42px;
+}
+
+.canvas-toolbar input[type="color"] {
+  height: 42px;
+  padding: 4px;
+}
+
 .canvas-inspector textarea {
   min-height: auto;
+}
+
+@media (max-width: 1280px) {
+  .canvas-workbench {
+    grid-template-columns: 220px minmax(540px, 1fr);
+  }
+
+  .canvas-inspector {
+    position: static;
+    grid-column: 1 / -1;
+    max-height: none;
+  }
 }
 
 @media (max-width: 900px) {
@@ -498,6 +529,7 @@ button:hover {
   .canvas-toolbar,
   .canvas-inspector {
     position: static;
+    max-height: none;
   }
 }
 
