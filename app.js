@@ -502,11 +502,11 @@ function initCanvasPage() {
   const editor = createCanvasEditor(dom.canvas, dom);
   renderCanvasEditor(editor);
   applyCanvasImport(editor, dom);
-  updateCanvasBodyPreview(editor, dom);
+  updateCanvasBodyPreview(editor, dom, { force: true });
 
   dom.file.addEventListener("change", (event) => loadCanvasBaseImage(event, editor, dom));
   dom.mode.addEventListener("change", () => updateCanvasBodyPreview(editor, dom));
-  dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom));
+  dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom, { force: true }));
   dom.inpaintParse?.addEventListener("click", () => parseCanvasPowerShellRequest(editor, dom));
   dom.send.addEventListener("click", () => sendCanvasRequest(editor, dom));
   dom.clearMask.addEventListener("click", () => {
@@ -1651,21 +1651,6 @@ async function sendCanvasRequest(editor, dom) {
     let bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
     const payload = JSON.parse(bodyText);
 
-    if (dom.mode.value === "inpaint") {
-      const currentMask = payload?.params?.inpaint?.maskImage || "";
-      if (editor.sourceMaskUrl && currentMask !== editor.sourceMaskUrl) {
-        if (!payload.params) payload.params = {};
-        if (!payload.params.inpaint) payload.params.inpaint = {};
-        payload.params.inpaint.maskImage = editor.sourceMaskUrl;
-      } else if (!editor.sourceMaskUrl && currentMask.startsWith("data:")) {
-        throw new Error(
-          "尚未支援上傳新塗的 mask（被 CORS 擋）。請先在 tensor.art 塗 mask 並送一次，再貼那份 PowerShell。"
-        );
-      }
-      bodyText = JSON.stringify(payload, null, 2);
-      dom.body.value = bodyText;
-    }
-
     state.canvasRequest = {
       ...blankRequestState(),
       ...canvasRequest,
@@ -2502,7 +2487,7 @@ function exportCanvasImage(editor) {
 }
 
 function exportCanvasMask(editor) {
-  if (editor.sourceMaskUrl) {
+  if (editor.sourceMaskUrl && isCanvasBlank(editor.maskCanvas)) {
     return editor.sourceMaskUrl;
   }
   return editor.maskCanvas.toDataURL("image/png");
@@ -2517,7 +2502,11 @@ function isCanvasBlank(canvas) {
   return true;
 }
 
-function updateCanvasBodyPreview(editor, dom) {
+function updateCanvasBodyPreview(editor, dom, { force = false } = {}) {
+  // Only "解析 Inpaint" and "Update Body" button should overwrite Body Preview.
+  // Other UI changes (mode switch, mask stroke, transform drag, etc.) leave the
+  // textbox alone so the user can hand-edit it for experiments.
+  if (!force) return;
   const draft = buildCanvasEditorDraftFromDom(editor, dom);
   dom.body.value = JSON.stringify(draft.body, null, 2);
 }
