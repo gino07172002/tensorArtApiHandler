@@ -63,6 +63,7 @@ function loadState() {
     post: blankRequestState(),
     selectedImageIds: [],
     galleryItems: [],
+    queryResultCopySeed: false,
     importedMetadata: null,
     savedSettings: { send: [], query: [], post: [] },
   };
@@ -78,6 +79,7 @@ function loadState() {
       post: { ...blankRequestState(), ...(parsed.post || {}) },
       selectedImageIds: Array.isArray(parsed.selectedImageIds) ? parsed.selectedImageIds : [],
       galleryItems: Array.isArray(parsed.galleryItems) ? parsed.galleryItems : [],
+      queryResultCopySeed: Boolean(parsed.queryResultCopySeed),
       importedMetadata: parsed.importedMetadata ?? null,
       savedSettings: parsed.savedSettings || { send: [], query: [], post: [] },
     };
@@ -110,6 +112,7 @@ function buildSnapshotData(source) {
     post: cloneRequestDraft(source.post),
     selectedImageIds: Array.isArray(source.selectedImageIds) ? [...source.selectedImageIds] : [],
     galleryItems: Array.isArray(source.galleryItems) ? JSON.parse(JSON.stringify(source.galleryItems)) : [],
+    queryResultCopySeed: Boolean(source.queryResultCopySeed),
     importedMetadata: source.importedMetadata ?? null,
     savedSettings: normalizeSavedSettings(source.savedSettings),
   };
@@ -150,6 +153,7 @@ async function importStorageSnapshot(event) {
     Object.assign(state.post, incoming.post);
     state.selectedImageIds = incoming.selectedImageIds;
     state.galleryItems = incoming.galleryItems;
+    state.queryResultCopySeed = incoming.queryResultCopySeed;
     state.importedMetadata = incoming.importedMetadata;
     state.savedSettings = incoming.savedSettings;
     saveState();
@@ -205,8 +209,11 @@ function initDashboardPage() {
     root: document.querySelector("#gallery"),
     selectedCount: document.querySelectorAll(".selected-count"),
     postClearIds: document.querySelectorAll(".post-clear-ids"),
+    copySeed: document.querySelector("#gallery-copy-seed"),
+    sendSection: send,
   };
 
+  bindGalleryOptions(gallery);
   renderRequestSection("send", send);
   renderRequestSection("query", query);
   renderRequestSection("post", post);
@@ -274,8 +281,11 @@ function initGalleryPage() {
     root: document.querySelector("#gallery"),
     selectedCount: document.querySelectorAll(".selected-count"),
     postClearIds: document.querySelectorAll(".post-clear-ids"),
+    copySeed: document.querySelector("#gallery-copy-seed"),
+    sendSection: null,
   };
 
+  bindGalleryOptions(gallery);
   renderRequestSection("query", query);
   renderRequestSection("post", post);
   renderGallery(gallery);
@@ -340,7 +350,7 @@ function initGalleryPage() {
     renderRequestSection("post", post);
   });
 
-  gallery.postSync.addEventListener("click", () => {
+  gallery.postSync?.addEventListener("click", () => {
     syncGenerationImageIds();
     saveState();
     renderRequestSection("post", post);
@@ -413,32 +423,11 @@ function initMetadataPage() {
     if (!state.importedMetadata || state.importedMetadata.error) return;
 
     try {
-      const payload = JSON.parse(state.send.bodyText || "{}");
-      const params = payload.params || {};
-      const meta = state.importedMetadata;
-      params.prompt = meta.prompt ?? params.prompt ?? "";
-      params.negativePrompt = meta.negativePrompt ?? params.negativePrompt ?? "";
-      params.steps = castNumber(meta.steps, params.steps);
-      params.cfgScale = castNumber(meta.cfgScale, params.cfgScale);
-      params.guidance = castNumber(meta.guidance, params.guidance);
-      params.clipSkip = castNumber(meta.clipSkip, params.clipSkip);
-      params.seed = String(meta.seed ?? params.seed ?? "-1");
-      params.sdVae = meta.vae ?? params.sdVae ?? "Automatic";
-      params.ksamplerName = meta.kSampler ?? params.ksamplerName ?? "";
-      params.schedule = meta.schedule ?? params.schedule ?? "";
-      params.width = castNumber(meta.width, params.width);
-      params.height = castNumber(meta.height, params.height);
-
-      if (meta.modelId && meta.modelFileId) {
-        params.baseModel = {
-          ...(params.baseModel || {}),
-          modelId: String(meta.modelId),
-          modelFileId: String(meta.modelFileId),
-        };
-      }
-
-      payload.params = params;
-      state.send.bodyText = JSON.stringify(payload, null, 2);
+      state.send.bodyText = applyGenerationMetadataToBody(
+        state.send.bodyText,
+        state.importedMetadata,
+        { includeSeed: true },
+      );
       saveState();
       output.textContent = `${JSON.stringify(state.importedMetadata, null, 2)}\n\n已套用到 Send Request Body。`;
     } catch (error) {
@@ -684,6 +673,16 @@ function syncGenerationImageIds() {
   }
 }
 
+function bindGalleryOptions(dom) {
+  if (!dom.copySeed) return;
+
+  dom.copySeed.checked = state.queryResultCopySeed;
+  dom.copySeed.addEventListener("change", (event) => {
+    state.queryResultCopySeed = event.target.checked;
+    saveState();
+  });
+}
+
 function renderGallery(dom) {
   dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
 
@@ -714,6 +713,7 @@ function renderGallery(dom) {
           </div>
           <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
           <div class="gallery-actions">
+            <button type="button" data-action="copy-to-send" data-index="${index}">複製到 API 1 Body</button>
             <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
           </div>
         </div>
@@ -808,6 +808,11 @@ async function handleGalleryAction(action, index, dom) {
   const entry = state.galleryItems[index];
   if (!entry) return;
 
+  if (action === "copy-to-send") {
+    copyGenerationToSendBody(entry, dom);
+    return;
+  }
+
   const signedExpiry = getSignedUrlExpiry(entry.url);
   if (signedExpiry && new Date() > signedExpiry) {
     dom.stats.textContent = `無法下載：圖片連結已在 ${signedExpiry.toLocaleTimeString("zh-TW", { hour12: false })} 過期，請重新查詢一次 API。`;
@@ -872,6 +877,28 @@ async function handleGalleryAction(action, index, dom) {
     dom.stats.textContent = `無法下載：${error.message} (建議重新 Query API 取得新連結)`;
   }
 }
+
+function copyGenerationToSendBody(entry, dom) {
+  try {
+    state.send.bodyText = applyGenerationMetadataToBody(
+      state.send.bodyText,
+      entry.metadata,
+      { includeSeed: state.queryResultCopySeed },
+    );
+    saveState();
+
+    if (dom.sendSection) {
+      renderRequestSection("send", dom.sendSection);
+    }
+
+    dom.stats.textContent = state.queryResultCopySeed
+      ? "已複製生成資料到 API 1 Body（包含 seed）。"
+      : "已複製生成資料到 API 1 Body（seed 已設為 -1）。";
+  } catch (error) {
+    dom.stats.textContent = `無法複製生成資料：${error.message}`;
+  }
+}
+
 function parsePowerShellRequest(text) {
   if (!text.trim()) {
     throw new Error("請先貼上 PowerShell 內容");
@@ -1105,6 +1132,37 @@ function extractTaskMetadata(task) {
     modelId: task.baseModel?.modelId || "",
     modelFileId: task.baseModel?.modelFileId || "",
   };
+}
+
+function applyGenerationMetadataToBody(bodyText, metadata, options = {}) {
+  const payload = JSON.parse(bodyText || "{}");
+  const params = payload.params || {};
+  const includeSeed = Boolean(options.includeSeed);
+
+  params.prompt = metadata.prompt ?? params.prompt ?? "";
+  params.negativePrompt = metadata.negativePrompt ?? params.negativePrompt ?? "";
+  params.steps = castNumber(metadata.steps, params.steps);
+  params.cfgScale = castNumber(metadata.cfgScale, params.cfgScale);
+  params.guidance = castNumber(metadata.guidance, params.guidance);
+  params.clipSkip = castNumber(metadata.clipSkip, params.clipSkip);
+  params.seed = includeSeed ? String(metadata.seed ?? params.seed ?? "-1") : "-1";
+  params.sdVae = metadata.vae ?? params.sdVae ?? "Automatic";
+  params.ksamplerName = metadata.kSampler || metadata.sampler || params.ksamplerName || "";
+  params.schedule = metadata.schedule ?? params.schedule ?? "";
+  params.width = castNumber(metadata.width, params.width);
+  params.height = castNumber(metadata.height, params.height);
+  params.denoisingStrength = castNumber(metadata.denoisingStrength, params.denoisingStrength);
+
+  if (metadata.modelId && metadata.modelFileId) {
+    params.baseModel = {
+      ...(params.baseModel || {}),
+      modelId: String(metadata.modelId),
+      modelFileId: String(metadata.modelFileId),
+    };
+  }
+
+  payload.params = params;
+  return JSON.stringify(payload, null, 2);
 }
 
 function castNumber(value, fallback) {

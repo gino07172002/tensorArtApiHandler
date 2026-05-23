@@ -9,7 +9,7 @@ const context = {
   Blob,
   URL: { createObjectURL: () => "blob:test", revokeObjectURL: () => {} },
   document: {
-    body: { dataset: { page: "" } },
+    body: { dataset: { page: "" }, append() {} },
     createElement: () => ({ click() {}, remove() {} }),
     querySelector: () => null,
     querySelectorAll: () => [],
@@ -26,113 +26,115 @@ const context = {
 vm.createContext(context);
 vm.runInContext(`${source}
 globalThis.__testExports = {
-  extractSharedHeaders,
-  getRequestSpecificHeaders,
-  buildEffectiveHeaders,
-  applyParsedPowerShellToRequestState,
-  getDefaultRequestState,
-  formatRequestError,
+  applyGenerationMetadataToBody,
+  copyGenerationToSendBody,
+  getState: () => state,
+  parsePowerShellRequest,
+  sanitizeHeaders,
 };
 `, context);
 
 const {
-  extractSharedHeaders,
-  getRequestSpecificHeaders,
-  buildEffectiveHeaders,
-  applyParsedPowerShellToRequestState,
-  getDefaultRequestState,
-  formatRequestError,
+  applyGenerationMetadataToBody,
+  copyGenerationToSendBody,
+  getState,
+  parsePowerShellRequest,
+  sanitizeHeaders,
 } = context.__testExports;
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-const mixedHeaders = {
+assert.deepEqual(plain(sanitizeHeaders({
   accept: "application/json",
-  authorization: "Bearer secret",
-  cookie: "SESSIONID=secret",
-  "x-echoing-env": "production",
+  cookie: "secret",
+  "content-length": "999",
   "x-request-sign": "sig-1",
-  "x-request-timestamp": "123",
-  "x-request-lang": "en",
-  "x-request-package-id": "pkg",
-  "x-request-sign-version": "v1",
-  "x-request-sign-type": "hmac",
-  "x-request-package-sign-version": "p1",
+})), {
+  accept: "application/json",
+  "x-request-sign": "sig-1",
+});
+
+const parsedRequest = parsePowerShellRequest(`
+Invoke-WebRequest -Uri "https://api.tensor.art/works/v1/works/tasks/query" \`
+  -Method "POST" \`
+  -Headers @{
+    "accept"="application/json"
+    "cookie"="secret"
+  } \`
+  -ContentType "application/json" \`
+  -Body '{"size":20}'
+`);
+
+assert.equal(parsedRequest.url, "https://api.tensor.art/works/v1/works/tasks/query");
+assert.equal(parsedRequest.method, "POST");
+assert.deepEqual(plain(parsedRequest.headers), { accept: "application/json" });
+assert.equal(parsedRequest.bodyText, '{"size":20}');
+
+const sourceBody = JSON.stringify({
+  params: {
+    prompt: "old prompt",
+    seed: "12345",
+    steps: 12,
+    keepMe: true,
+  },
+  projectId: "project-1",
+});
+
+const metadata = {
+  prompt: "new prompt",
+  negativePrompt: "low quality",
+  seed: "987654321",
+  steps: "30",
+  cfgScale: "7.5",
+  guidance: "3.5",
+  clipSkip: "2",
+  width: "768",
+  height: "1024",
+  vae: "Automatic",
+  sampler: "Euler a",
+  schedule: "Karras",
+  denoisingStrength: "0.45",
+  modelId: 111,
+  modelFileId: 222,
 };
 
-assert.deepEqual(plain(extractSharedHeaders(mixedHeaders)), {
-  "x-echoing-env": "production",
-  "x-request-sign": "sig-1",
-  "x-request-timestamp": "123",
-  "x-request-lang": "en",
-  "x-request-package-id": "pkg",
-  "x-request-sign-version": "v1",
-  "x-request-sign-type": "hmac",
-  "x-request-package-sign-version": "p1",
+const copiedWithoutSeed = JSON.parse(applyGenerationMetadataToBody(sourceBody, metadata, { includeSeed: false }));
+
+assert.equal(copiedWithoutSeed.projectId, "project-1");
+assert.equal(copiedWithoutSeed.params.keepMe, true);
+assert.equal(copiedWithoutSeed.params.prompt, "new prompt");
+assert.equal(copiedWithoutSeed.params.negativePrompt, "low quality");
+assert.equal(copiedWithoutSeed.params.seed, "-1");
+assert.equal(copiedWithoutSeed.params.steps, 30);
+assert.equal(copiedWithoutSeed.params.cfgScale, 7.5);
+assert.equal(copiedWithoutSeed.params.guidance, 3.5);
+assert.equal(copiedWithoutSeed.params.clipSkip, 2);
+assert.equal(copiedWithoutSeed.params.width, 768);
+assert.equal(copiedWithoutSeed.params.height, 1024);
+assert.equal(copiedWithoutSeed.params.sdVae, "Automatic");
+assert.equal(copiedWithoutSeed.params.ksamplerName, "Euler a");
+assert.equal(copiedWithoutSeed.params.schedule, "Karras");
+assert.equal(copiedWithoutSeed.params.denoisingStrength, 0.45);
+assert.deepEqual(copiedWithoutSeed.params.baseModel, {
+  modelId: "111",
+  modelFileId: "222",
 });
 
-assert.deepEqual(plain(extractSharedHeaders({ "x-echoing-env": "" })), {
-  "x-echoing-env": "",
-});
+const copiedWithSeed = JSON.parse(applyGenerationMetadataToBody(sourceBody, metadata, { includeSeed: true }));
+assert.equal(copiedWithSeed.params.seed, "987654321");
 
-assert.deepEqual(plain(getRequestSpecificHeaders(mixedHeaders)), {
-  accept: "application/json",
-});
+const state = getState();
+const dom = { stats: { textContent: "" }, sendSection: null };
+state.send.bodyText = sourceBody;
+state.queryResultCopySeed = false;
+copyGenerationToSendBody({ metadata }, dom);
+assert.equal(JSON.parse(state.send.bodyText).params.seed, "-1");
+assert.match(dom.stats.textContent, /seed 已設為 -1/);
 
-assert.deepEqual(
-  plain(
-  buildEffectiveHeaders(
-    { accept: "application/json", "x-request-sign": "old" },
-    { "x-request-sign": "fresh", "x-request-timestamp": "456" },
-  ),
-  ),
-  {
-    accept: "application/json",
-    "x-request-sign": "fresh",
-    "x-request-timestamp": "456",
-  },
-);
-
-const request = {
-  powershell: "",
-  url: "",
-  method: "POST",
-  headers: {},
-  bodyText: "",
-};
-const common = { powershell: "", headers: {} };
-applyParsedPowerShellToRequestState(
-  request,
-  common,
-  {
-    powershell: "Invoke-WebRequest ...",
-    url: "https://api.tensor.art/works/v1/works/tasks/query",
-    method: "POST",
-    headers: mixedHeaders,
-    bodyText: '{"size":20}',
-  },
-);
-
-assert.equal(request.url, "https://api.tensor.art/works/v1/works/tasks/query");
-assert.equal(request.bodyText, '{"size":20}');
-assert.deepEqual(plain(request.headers), { accept: "application/json" });
-assert.equal(common.headers["x-request-sign"], "sig-1");
-assert.equal(common.headers.authorization, undefined);
-
-const defaultSend = getDefaultRequestState("send");
-assert.equal(defaultSend.url, "https://api.tensor.art/works/v1/works/task");
-assert.equal(defaultSend.method, "POST");
-assert.equal(defaultSend.headers.accept, "*/*");
-assert.match(defaultSend.bodyText, /adult elf woman/);
-assert.doesNotMatch(defaultSend.bodyText, /authorization|x-request-sign|cookie/i);
-
-const defaultQuery = getDefaultRequestState("query");
-assert.equal(defaultQuery.url, "https://api.tensor.art/works/v1/works/tasks/query");
-assert.match(defaultQuery.bodyText, /"size": 30/);
-
-assert.match(
-  formatRequestError(new TypeError("Failed to fetch"), "http://127.0.0.1:8788/index.html"),
-  /GitHub Pages/,
-);
+state.send.bodyText = sourceBody;
+state.queryResultCopySeed = true;
+copyGenerationToSendBody({ metadata }, dom);
+assert.equal(JSON.parse(state.send.bodyText).params.seed, "987654321");
+assert.match(dom.stats.textContent, /包含 seed/);
 
 console.log("app helper tests passed");

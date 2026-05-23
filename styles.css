@@ -210,6 +210,21 @@ textarea:focus {
   margin-top: 0;
 }
 
+.copy-seed-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--accent-dark);
+  cursor: pointer;
+}
+
+.copy-seed-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
 .editor-fold,
 .response-fold {
   margin-top: 16px;
