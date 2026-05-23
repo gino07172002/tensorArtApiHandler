@@ -344,27 +344,7 @@ button:hover {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  align-items: flex-start;
-}
-
-.gallery-head {
-  padding-right: 92px;
-}
-
-.gallery-head-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.gallery-selection {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   align-items: center;
-  justify-content: flex-start;
-  margin-top: 10px;
 }
 
 .gallery-title {
@@ -372,9 +352,53 @@ button:hover {
   min-width: 0;
   margin: 0;
   font-family: "Space Grotesk", sans-serif;
-  font-size: 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
   line-height: 1.2;
+  color: var(--muted);
   overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-taskid {
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.gallery-selection {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.gallery-selection-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid rgba(196, 79, 43, 0.28);
+  border-radius: 999px;
+  background: rgba(196, 79, 43, 0.08);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.gallery-selection-label:hover {
+  background: rgba(196, 79, 43, 0.14);
+  border-color: rgba(196, 79, 43, 0.42);
+}
+
+.gallery-selection-label input {
+  flex: 0 0 auto;
+  accent-color: var(--accent);
 }
 
 .remix-button {
@@ -388,52 +412,34 @@ button:hover {
 }
 
 .gallery-action-menu {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+  position: relative;
   flex: 0 0 auto;
 }
 
-.gallery-open-button {
-  position: absolute;
-  top: 14px;
-  right: 84px;
-  min-height: 24px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  line-height: 1;
-  color: var(--accent-dark);
-  background: rgba(135, 49, 23, 0.1);
-  border: 1px solid rgba(135, 49, 23, 0.12);
-}
-
-.gallery-action-menu summary {
-  list-style: none;
-  cursor: pointer;
-}
-
-.gallery-action-menu summary::-webkit-details-marker {
-  display: none;
+.gallery-action-trigger {
+  font-size: 0.75rem;
+  letter-spacing: 0.01em;
 }
 
 .gallery-action-list {
   position: absolute;
-  right: 0;
+  left: 0;
   top: calc(100% + 6px);
   z-index: 30;
-  display: grid;
-  gap: 6px;
-  min-width: 160px;
-  padding: 8px;
+  display: none;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 148px;
+  padding: 7px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-strong);
   box-shadow: var(--shadow);
 }
 
-.gallery-action-menu[open] {
-  flex-basis: auto;
+.gallery-action-menu:hover .gallery-action-list,
+.gallery-action-menu:focus-within .gallery-action-list {
+  display: grid;
 }
 
 .gallery-action-list button {
@@ -442,28 +448,26 @@ button:hover {
   padding: 6px 10px;
   border-radius: 8px;
   text-align: left;
+  font-size: 0.8rem;
   color: var(--accent-dark);
-  background: rgba(196, 79, 43, 0.08);
+  background: rgba(196, 79, 43, 0.07);
   border: 1px solid rgba(196, 79, 43, 0.12);
 }
 
-.gallery-selection-label {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid rgba(196, 79, 43, 0.14);
-  border-radius: 999px;
-  background: rgba(196, 79, 43, 0.08);
-  font-size: 0.875rem;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
+.gallery-action-list button:hover {
+  background: rgba(196, 79, 43, 0.14);
 }
 
-.gallery-selection-label input {
+.gallery-open-button {
   flex: 0 0 auto;
+  min-height: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--muted);
+  background: rgba(108, 86, 72, 0.08);
+  border: 1px solid rgba(108, 86, 72, 0.16);
 }
 
 .pill {

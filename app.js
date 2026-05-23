@@ -935,7 +935,7 @@ function renderGallery(dom) {
         <img src="${escapeHtml(entry.url)}" alt="Task ${escapeHtml(entry.taskId)}">
         <div class="gallery-body">
           <div class="gallery-head">
-            <h3 class="gallery-title">Task ${escapeHtml(entry.taskId)}</h3>
+            <h3 class="gallery-title">Task <span class="gallery-taskid">${escapeHtml(entry.taskId)}</span></h3>
             <span class="pill">${escapeHtml(entry.status || "UNKNOWN")}</span>
           </div>
           <div class="gallery-selection">
@@ -943,16 +943,16 @@ function renderGallery(dom) {
               <input type="checkbox" data-image-id="${escapeHtml(imageId)}"${checked} ${imageId ? "" : "disabled"}>
               <span>加入 ID</span>
             </label>
-            <button type="button" class="gallery-open-button" data-action="open-original" data-index="${index}" title="Open image">Open</button>
-            <details class="gallery-action-menu">
-              <summary class="remix-button">Actions</summary>
+            <div class="gallery-action-menu">
+              <button type="button" class="remix-button gallery-action-trigger">Actions ▾</button>
               <div class="gallery-action-list">
                 <button type="button" data-action="copy-to-send" data-index="${index}" title="複製生成參數到 API 1 (seed=-1)">Remix</button>
                 <button type="button" data-action="copy-to-send-seed" data-index="${index}" title="複製生成參數到 API 1 (保留 seed)">Remix+Seed</button>
                 <button type="button" data-action="remix-inpaint" data-index="${index}" title="帶圖到 Canvas 做 Inpaint">Inpaint</button>
                 <button type="button" data-action="remix-img2img" data-index="${index}" title="帶圖到 Canvas 做 Img2Img">Img2Img</button>
               </div>
-            </details>
+            </div>
+            <button type="button" class="gallery-open-button" data-action="open-original" data-index="${index}" title="Open image">Open</button>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>

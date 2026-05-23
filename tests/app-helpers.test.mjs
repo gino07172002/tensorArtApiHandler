@@ -194,25 +194,26 @@ renderGallery({
   selectedCount: [{ textContent: "" }],
 });
 
-const galleryHead = galleryRoot.innerHTML.match(/<div class="gallery-head">([\s\S]*?)<\/div>/)?.[1] || "";
-const gallerySelection = galleryRoot.innerHTML.match(/<div class="gallery-selection">([\s\S]*?)<\/div>/)?.[1] || "";
-assert.match(galleryHead, /Task task-1/);
+const galleryHtml = galleryRoot.innerHTML;
+const galleryHead = galleryHtml.match(/<div class="gallery-head">([\s\S]*?)<\/div>/)?.[1] || "";
+assert.match(galleryHead, /Task.*task-1/);
 assert.doesNotMatch(galleryHead, /data-action="copy-to-send"/);
-assert.match(gallerySelection, /type="checkbox"/);
-assert.match(gallerySelection, /data-image-id="image-1"/);
-assert.match(gallerySelection, /加入 ID/);
-assert.match(gallerySelection, /<details class="gallery-action-menu">/);
-assert.match(gallerySelection, /<summary[^>]*>Actions<\/summary>/);
-assert.match(gallerySelection, /data-action="copy-to-send"/);
-assert.match(gallerySelection, /data-action="copy-to-send-seed"/);
-assert.match(gallerySelection, /data-action="remix-inpaint"/);
-assert.match(gallerySelection, /data-action="remix-img2img"/);
-assert.match(gallerySelection, />Inpaint</);
-assert.match(gallerySelection, />Img2Img</);
-assert.match(gallerySelection, /class="gallery-open-button"/);
-assert.match(gallerySelection, /data-action="open-original"/);
-assert.match(gallerySelection, />Open</);
-assert.doesNotMatch(gallerySelection, /remax/);
+assert.match(galleryHtml, /class="gallery-selection"/);
+assert.match(galleryHtml, /type="checkbox"/);
+assert.match(galleryHtml, /data-image-id="image-1"/);
+assert.match(galleryHtml, /加入 ID/);
+assert.match(galleryHtml, /class="gallery-action-menu"/);
+assert.match(galleryHtml, /Actions/);
+assert.match(galleryHtml, /data-action="copy-to-send"/);
+assert.match(galleryHtml, /data-action="copy-to-send-seed"/);
+assert.match(galleryHtml, /data-action="remix-inpaint"/);
+assert.match(galleryHtml, /data-action="remix-img2img"/);
+assert.match(galleryHtml, />Inpaint</);
+assert.match(galleryHtml, />Img2Img</);
+assert.match(galleryHtml, /class="gallery-open-button"/);
+assert.match(galleryHtml, /data-action="open-original"/);
+assert.match(galleryHtml, />Open</);
+assert.doesNotMatch(galleryHtml, /remax/);
 assert.doesNotMatch(galleryRoot.innerHTML, /複製到 API 1 Body/);
 
 const canvasImport = buildCanvasImportFromGalleryEntry(state.galleryItems[0], "img2img");
