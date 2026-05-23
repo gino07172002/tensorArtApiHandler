@@ -29,6 +29,8 @@ globalThis.__testExports = {
   applyGenerationMetadataToBody,
   buildCanvasEditorRequestDraft,
   createCanvasImageLoadAttempts,
+  getCanvasStrokeMode,
+  readCanvasColorAtPoint,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState: () => state,
@@ -42,6 +44,8 @@ const {
   applyGenerationMetadataToBody,
   buildCanvasEditorRequestDraft,
   createCanvasImageLoadAttempts,
+  getCanvasStrokeMode,
+  readCanvasColorAtPoint,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState,
@@ -191,6 +195,24 @@ assert.deepEqual(plain(createCanvasImageLoadAttempts("https://image.tensorartass
   { url: "https://image.tensorartassets.com/example.png", crossOrigin: "anonymous" },
   { url: "https://image.tensorartassets.com/example.png", crossOrigin: "" },
 ]);
+assert.equal(getCanvasStrokeMode({ layer: "paint", tool: "brush" }), "paint-add");
+assert.equal(getCanvasStrokeMode({ layer: "paint", tool: "eraser" }), "paint-remove");
+assert.equal(getCanvasStrokeMode({ layer: "mask", tool: "brush" }), "mask-add");
+assert.equal(getCanvasStrokeMode({ layer: "mask", tool: "eraser" }), "mask-remove");
+assert.equal(getCanvasStrokeMode({ layer: "mask", tool: "move" }), "none");
+assert.equal(getCanvasStrokeMode({ layer: "mask", tool: "eyedropper" }), "none");
+assert.deepEqual(plain(readCanvasColorAtPoint({
+  getImageData: () => ({ data: [1, 35, 255, 255] }),
+}, { x: 10, y: 20 })), { color: "#0123ff", error: "" });
+const blockedColorRead = readCanvasColorAtPoint({
+  getImageData: () => {
+    const error = new Error("blocked");
+    error.name = "SecurityError";
+    throw error;
+  },
+}, { x: 10, y: 20 });
+assert.equal(blockedColorRead.color, "");
+assert.match(blockedColorRead.error, /CORS/);
 
 const canvasBase = {
   prompt: "portrait study",

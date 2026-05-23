@@ -466,7 +466,23 @@ button:hover {
   gap: 8px;
 }
 
-.tool-button {
+.layer-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.field-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.tool-button,
+.layer-button {
   width: 100%;
   min-height: 38px;
   padding: 8px 10px;
@@ -476,7 +492,8 @@ button:hover {
   border: 1px solid rgba(196, 79, 43, 0.16);
 }
 
-.tool-button.is-active {
+.tool-button.is-active,
+.layer-button.is-active {
   color: #fff7f1;
   background: var(--accent);
 }

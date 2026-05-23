@@ -450,6 +450,7 @@ function initCanvasPage() {
     file: document.querySelector("#canvas-file"),
     mode: document.querySelector("#canvas-mode"),
     toolButtons: document.querySelectorAll("[data-canvas-tool]"),
+    layerButtons: document.querySelectorAll("[data-canvas-layer]"),
     brushSize: document.querySelector("#canvas-brush-size"),
     brushOpacity: document.querySelector("#canvas-brush-opacity"),
     color: document.querySelector("#canvas-color"),
@@ -512,6 +513,14 @@ function initCanvasPage() {
     button.addEventListener("click", () => {
       editor.tool = button.dataset.canvasTool;
       dom.toolButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+    });
+  });
+
+  dom.layerButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      editor.layer = button.dataset.canvasLayer;
+      dom.layerButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+      renderCanvasEditor(editor);
     });
   });
 
@@ -1396,6 +1405,7 @@ function createCanvasEditor(canvas, dom) {
     taskId: "",
     ksamplerName: "euler_ancestral",
     schedule: "normal",
+    layer: "paint",
     tool: "move",
     pointer: null,
     transform: {
@@ -1558,9 +1568,23 @@ function handleCanvasPointerDown(event, editor, dom) {
   editor.canvas.setPointerCapture?.(event.pointerId);
 
   if (editor.tool === "eyedropper") {
-    const pixel = editor.ctx.getImageData(point.x, point.y, 1, 1).data;
-    dom.color.value = rgbToHex(pixel[0], pixel[1], pixel[2]);
-    dom.stats.textContent = `已吸色 ${dom.color.value}`;
+    const picked = readCanvasColorAtPoint(editor.ctx, point);
+    if (picked.color) {
+      dom.color.value = picked.color;
+      dom.stats.textContent = `Picked ${picked.color}`;
+    } else if ("EyeDropper" in window) {
+      dom.stats.textContent = "Pick a color from the screen.";
+      new window.EyeDropper().open()
+        .then((result) => {
+          dom.color.value = result.sRGBHex;
+          dom.stats.textContent = `Picked ${result.sRGBHex}`;
+        })
+        .catch(() => {
+          dom.stats.textContent = picked.error || "Could not pick a color from this image.";
+        });
+    } else {
+      dom.stats.textContent = picked.error || "Could not pick a color from this image.";
+    }
     return;
   }
 
@@ -1600,17 +1624,19 @@ function handleCanvasPointerMove(event, editor, dom) {
 function drawCanvasStroke(from, to, editor, dom) {
   const size = Number(dom.brushSize.value || 20);
   const opacity = Number(dom.brushOpacity.value || 70) / 100;
-  const target = editor.tool === "mask" ? editor.maskCtx : editor.paintCtx;
+  const strokeMode = getCanvasStrokeMode(editor);
+  if (strokeMode === "none") return;
+  const target = editor.layer === "mask" ? editor.maskCtx : editor.paintCtx;
 
   target.save();
   target.lineCap = "round";
   target.lineJoin = "round";
   target.lineWidth = size;
 
-  if (editor.tool === "eraser") {
+  if (strokeMode === "paint-remove" || strokeMode === "mask-remove") {
     target.globalCompositeOperation = "destination-out";
     target.strokeStyle = "rgba(0,0,0,1)";
-  } else if (editor.tool === "mask") {
+  } else if (strokeMode === "mask-add") {
     target.globalAlpha = opacity;
     target.strokeStyle = "#ffffff";
   } else {
@@ -1623,6 +1649,12 @@ function drawCanvasStroke(from, to, editor, dom) {
   target.lineTo(to.x, to.y);
   target.stroke();
   target.restore();
+}
+
+function getCanvasStrokeMode(editor) {
+  if (editor.tool !== "brush" && editor.tool !== "eraser") return "none";
+  const layer = editor.layer === "mask" ? "mask" : "paint";
+  return `${layer}-${editor.tool === "eraser" ? "remove" : "add"}`;
 }
 
 function renderCanvasEditor(editor) {
@@ -1639,13 +1671,15 @@ function renderCanvasEditor(editor) {
     ctx.restore();
   }
 
-  ctx.drawImage(editor.paintCanvas, 0, 0);
-  ctx.save();
-  ctx.globalAlpha = 0.42;
-  ctx.fillStyle = "#ff3d5a";
-  ctx.globalCompositeOperation = "source-over";
-  ctx.drawImage(tintCanvas(editor.maskCanvas, "#ff3d5a"), 0, 0);
-  ctx.restore();
+  if (editor.layer === "mask") {
+    ctx.save();
+    ctx.globalAlpha = 0.72;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.drawImage(tintCanvas(editor.maskCanvas, "#111111"), 0, 0);
+    ctx.restore();
+  } else {
+    ctx.drawImage(editor.paintCanvas, 0, 0);
+  }
 }
 
 function drawCanvasGrid(ctx, width, height) {
@@ -1744,6 +1778,18 @@ function exportCanvasImage(editor) {
 function updateCanvasBodyPreview(editor, dom) {
   const draft = buildCanvasEditorDraftFromDom(editor, dom);
   dom.body.value = JSON.stringify(draft.body, null, 2);
+}
+
+function readCanvasColorAtPoint(ctx, point) {
+  try {
+    const pixel = ctx.getImageData(point.x, point.y, 1, 1).data;
+    return { color: rgbToHex(pixel[0], pixel[1], pixel[2]), error: "" };
+  } catch (error) {
+    return {
+      color: "",
+      error: "Cannot pick this pixel because the image blocks CORS. Use a local image or a CORS-enabled source.",
+    };
+  }
 }
 
 function rgbToHex(r, g, b) {
