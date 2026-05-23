@@ -809,7 +809,7 @@ function bindPresetControls(key, section) {
 
   section.presetDelete.addEventListener("click", () => {
     if (!state[key].presetId) return;
-    if (!confirm("蝣箏?閬?斗迨閮剖???")) return;
+    if (!confirm("確定要刪除此預設嗎?")) return;
     state.savedSettings[key] = state.savedSettings[key].filter(p => p.id !== state[key].presetId);
     state[key].presetId = null;
     saveState();
@@ -833,7 +833,7 @@ function renderPresetOptions(key, section) {
   if (!section.presetSelect) return;
   const presets = state.savedSettings[key] || [];
   
-  const options = [`<option value="">-- ?芸摮??阮 --</option>`];
+  const options = [`<option value="">-- 未儲存的草稿 --</option>`];
   presets.forEach(p => {
     options.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`);
   });
@@ -879,7 +879,7 @@ function initializeRequestSectionVisibility(key, section) {
 async function submitRequestSection(key, section, updateGallery) {
   try {
     const request = buildFetchRequest(key);
-    setResponse(key, "?銝?..");
+    setResponse(key, "送出中..");
     renderRequestSection(key, section);
     section.responseFold.open = false;
 
@@ -975,7 +975,7 @@ function renderGallery(dom) {
           </div>
           <div class="gallery-selection">
             <input type="checkbox" id="pick-${index}" data-image-id="${escapeHtml(entry.generationImageId)}" ${checked}>
-            <label for="pick-${index}">? generationImageIds</label>
+            <label for="pick-${index}">加入 generationImageIds</label>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
@@ -983,7 +983,7 @@ function renderGallery(dom) {
           </div>
           <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
           <div class="gallery-actions">
-            <button type="button" data-action="open-original" data-index="${index}">????</button>
+            <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
             <button type="button" data-action="apply-to-send" data-index="${index}">套用到 Send Body</button>
             <label style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem;">
               <input type="checkbox" class="keep-seed" data-index="${index}" checked>
@@ -1048,7 +1048,7 @@ function extractBlobFromImageElement(imgElement, targetMimeType) {
         reject(new Error("Image element is missing a source"));
         return;
       }
-      // 撱箇??啁? Image ?拐辣銝西身摰?crossorigin嚗????gallery 銝剔??? img
+      // 建立新的 Image 物件並設定 crossorigin,避免重用 gallery 中既有的 img
       const corsImg = new Image();
       corsImg.crossOrigin = "anonymous";
       corsImg.onload = () => {
@@ -1128,16 +1128,17 @@ async function handleGalleryAction(action, index, dom) {
       }
     }
     
-    dom.stats.textContent = "甇?敺翰??????隢???..";
+    dom.stats.textContent = "正在處理圖片,請稍候..";
     
     let blob;
     try {
-      // ?湔敺?Ｖ?撌脩?頛??img 璅惜??銝西?瑼?銝???fetch()
+      // 優先嘗試從已載入的 img 物件中匯出位元組,避免重新 fetch()
       const imgElement = dom.root.querySelectorAll('.gallery-card img')[index];
       const targetMimeType = action === "download-jpg" ? "image/jpeg" : mimeType;
       blob = await extractBlobFromImageElement(imgElement, targetMimeType);
     } catch (e) {
-      // ???寞?嚗?甈∠??瘙?      dom.stats.textContent = "?⊥??湔敺翰????甇??閰阡??唬?頛???..";
+      // 備援方案:用 fetch 重新下載
+      dom.stats.textContent = "無法從圖片元素匯出,改用 fetch 重新下載..";
       blob = await fetchBlobForSave(entry.url, mimeType);
       if (action === "download-jpg" && blob.type !== "image/jpeg" && blob.type !== "image/jpg") {
         blob = await convertBlobToJpeg(blob);
@@ -1152,15 +1153,15 @@ async function handleGalleryAction(action, index, dom) {
       triggerDownload(blob, suggestedFileName);
     }
     
-    dom.stats.textContent = `撌脣??摮瑼?${suggestedFileName}`;
+    dom.stats.textContent = `已儲存為 ${suggestedFileName}`;
   } catch (error) {
     if (error.name === "AbortError") return;
-    dom.stats.textContent = `?⊥?銝?嚗?{error.message} (撱箄降? Query API ???圈??)`;
+    dom.stats.textContent = `下載失敗:${error.message} (建議重新呼叫 Query API 取得新網址)`;
   }
 }
 function parsePowerShellRequest(text) {
   if (!text.trim()) {
-    throw new Error("隢?鞎潔? PowerShell ?批捆");
+    throw new Error("請貼上 PowerShell 內容");
   }
 
   const url = capture(text, /-Uri\s+"([\s\S]*?)"\s*`?\s*-Method/i);
@@ -1198,7 +1199,7 @@ function sanitizeHeaders(headers) {
 function capture(text, pattern) {
   const match = text.match(pattern);
   if (!match) {
-    throw new Error(`?曆??啣?閬?雿? ${pattern}`);
+    throw new Error(`找不到符合的欄位: ${pattern}`);
   }
   return match[1];
 }
@@ -1318,7 +1319,7 @@ function formatResponse(text) {
 }
 
 function buildResponsePreview(text) {
-  if (!text) return "???汗";
+  if (!text) return "無內容";
   const lines = text.split(/\r?\n/);
   const preview = lines.slice(0, 5).join(" ");
   return lines.length > 5 ? `${preview} ...` : preview;
@@ -1451,7 +1452,7 @@ async function embedMetadataInOriginal(blob, metadata) {
 async function embedMetadataInPng(blob, metadata) {
   const original = new Uint8Array(await blob.arrayBuffer());
   if (!matchesSignature(original, PNG_SIGNATURE)) {
-    throw new Error("瑼?銝?? PNG");
+    throw new Error("檔案不是 PNG");
   }
 
   const payload = new TextEncoder().encode(`AITestMetadata\0${JSON.stringify(metadata)}`);
@@ -1491,7 +1492,7 @@ function findPngIendOffset(bytes) {
 async function embedMetadataInJpeg(blob, metadata) {
   const original = new Uint8Array(await blob.arrayBuffer());
   if (original[0] !== JPEG_SOI[0] || original[1] !== JPEG_SOI[1]) {
-    throw new Error("瑼?銝?? JPEG");
+    throw new Error("檔案不是 JPEG");
   }
 
   const comment = new TextEncoder().encode(`AITestMetadata:${JSON.stringify(metadata)}`);
@@ -1513,7 +1514,7 @@ async function readMetadataFromImage(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (matchesSignature(bytes, PNG_SIGNATURE)) return readMetadataFromPng(bytes);
   if (bytes[0] === JPEG_SOI[0] && bytes[1] === JPEG_SOI[1]) return readMetadataFromJpeg(bytes);
-  throw new Error("?芣??PNG ??JPEG");
+  throw new Error("不支援的格式,僅支援 PNG 或 JPEG");
 }
 
 function readMetadataFromPng(bytes) {
@@ -1529,7 +1530,7 @@ function readMetadataFromPng(bytes) {
     }
     offset += 12 + length;
   }
-  throw new Error("???扳銝 AITestMetadata");
+  throw new Error("找不到 AITestMetadata");
 }
 
 function readMetadataFromJpeg(bytes) {
@@ -1550,7 +1551,7 @@ function readMetadataFromJpeg(bytes) {
     }
     offset += 2 + length;
   }
-  throw new Error("???扳銝 AITestMetadata");
+  throw new Error("找不到 AITestMetadata");
 }
 
 function matchesSignature(bytes, signature) {
@@ -1658,7 +1659,7 @@ async function fetchBlobForSave(url, mimeTypeHint) {
   }
 
   if (!response.ok) {
-    throw new Error(`銝?憭望?: HTTP ${response.status}`);
+    throw new Error(`下載失敗: HTTP ${response.status}`);
   }
 
   const blob = await response.blob();
