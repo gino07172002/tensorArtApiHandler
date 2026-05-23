@@ -32,6 +32,7 @@ globalThis.__testExports = {
   getCanvasStrokeMode,
   readCanvasColorAtPoint,
   applyParsedCanvasRequestToForm,
+  storeCanvasParsedRequest,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState: () => state,
@@ -48,6 +49,7 @@ const {
   getCanvasStrokeMode,
   readCanvasColorAtPoint,
   applyParsedCanvasRequestToForm,
+  storeCanvasParsedRequest,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState,
@@ -291,6 +293,13 @@ assert.equal(canvasFormDom.modelFileId.value, "222");
 assert.equal(canvasEditor.sourceImageUrl, "https://example.test/base.jpg");
 assert.equal(canvasEditor.imageId, "image-9");
 assert.equal(JSON.parse(canvasFormDom.body.value).params.inpaint.maskImage, "https://example.test/mask.png");
+state.send.bodyText = '{"api1":true}';
+state.send.headers = { "x-api-1": "keep" };
+storeCanvasParsedRequest(parsedInpaint);
+assert.equal(state.send.bodyText, '{"api1":true}');
+assert.deepEqual(plain(state.send.headers), { "x-api-1": "keep" });
+assert.equal(state.canvasRequest.url, "https://api.tensor.art/works/v1/works/task_by_image");
+assert.equal(JSON.parse(state.canvasRequest.bodyText).taskType, "IMAGE_TO_INPAINT");
 
 const canvasBase = {
   prompt: "portrait study",

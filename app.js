@@ -65,6 +65,7 @@ function loadState() {
     send: blankRequestState(),
     query: blankRequestState(),
     post: blankRequestState(),
+    canvasRequest: blankRequestState(),
     selectedImageIds: [],
     galleryItems: [],
     queryResultCopySeed: false,
@@ -82,6 +83,7 @@ function loadState() {
       send: { ...blankRequestState(), ...(parsed.send || {}) },
       query: { ...blankRequestState(), ...(parsed.query || {}) },
       post: { ...blankRequestState(), ...(parsed.post || {}) },
+      canvasRequest: { ...blankRequestState(), ...(parsed.canvasRequest || {}) },
       selectedImageIds: Array.isArray(parsed.selectedImageIds) ? parsed.selectedImageIds : [],
       galleryItems: Array.isArray(parsed.galleryItems) ? parsed.galleryItems : [],
       queryResultCopySeed: Boolean(parsed.queryResultCopySeed),
@@ -116,6 +118,7 @@ function buildSnapshotData(source) {
     send: cloneRequestDraft(source.send),
     query: cloneRequestDraft(source.query),
     post: cloneRequestDraft(source.post),
+    canvasRequest: cloneRequestDraft(source.canvasRequest),
     selectedImageIds: Array.isArray(source.selectedImageIds) ? [...source.selectedImageIds] : [],
     galleryItems: Array.isArray(source.galleryItems) ? JSON.parse(JSON.stringify(source.galleryItems)) : [],
     queryResultCopySeed: Boolean(source.queryResultCopySeed),
@@ -158,6 +161,7 @@ async function importStorageSnapshot(event) {
     Object.assign(state.send, incoming.send);
     Object.assign(state.query, incoming.query);
     Object.assign(state.post, incoming.post);
+    Object.assign(state.canvasRequest, incoming.canvasRequest);
     state.selectedImageIds = incoming.selectedImageIds;
     state.galleryItems = incoming.galleryItems;
     state.queryResultCopySeed = incoming.queryResultCopySeed;
@@ -471,7 +475,6 @@ function initCanvasPage() {
     body: document.querySelector("#canvas-body"),
     stats: document.querySelector("#canvas-stats"),
     build: document.querySelector("#canvas-build"),
-    applyToSend: document.querySelector("#canvas-apply-send"),
     send: document.querySelector("#canvas-send"),
     response: document.querySelector("#canvas-response"),
     responseFold: document.querySelector("#canvas-response-fold"),
@@ -505,18 +508,6 @@ function initCanvasPage() {
   dom.mode.addEventListener("change", () => updateCanvasBodyPreview(editor, dom));
   dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom));
   dom.inpaintParse?.addEventListener("click", () => parseCanvasPowerShellRequest(editor, dom));
-  dom.applyToSend.addEventListener("click", () => {
-    const draft = buildCanvasEditorDraftFromDom(editor, dom);
-    state.send.url = draft.url;
-    state.send.method = draft.method;
-    state.send.headers = {
-      ...getCanvasInheritedHeaders(),
-      "content-type": draft.contentType,
-    };
-    state.send.bodyText = JSON.stringify(draft.body, null, 2);
-    saveState();
-    dom.stats.textContent = "已套用到 Dashboard 的 API 1 Body。";
-  });
   dom.send.addEventListener("click", () => sendCanvasRequest(editor, dom));
   dom.clearMask.addEventListener("click", () => {
     editor.maskCtx.clearRect(0, 0, editor.maskCanvas.width, editor.maskCanvas.height);
@@ -1539,26 +1530,12 @@ function buildCanvasEditorRequestDraft(input) {
   };
 }
 
-function getCanvasInheritedHeaders() {
-  const candidates = [state.send.headers, state.query.headers, state.post.headers];
-  const inherited = candidates.find((headers) => headers && Object.keys(headers).length) || {};
-  return sanitizeHeaders(inherited);
-}
-
 function parseCanvasPowerShellRequest(editor, dom) {
   try {
     const parsed = parsePowerShellRequest(dom.inpaintPowerShell.value);
     applyParsedCanvasRequestToForm(parsed, editor, dom);
 
-    state.send = {
-      ...blankRequestState(),
-      ...state.send,
-      powershell: parsed.powershell,
-      url: parsed.url,
-      method: parsed.method,
-      headers: parsed.headers,
-      bodyText: formatJsonString(parsed.bodyText),
-    };
+    storeCanvasParsedRequest(parsed);
     saveState();
 
     if (dom.inpaintHeaders) {
@@ -1577,6 +1554,18 @@ function parseCanvasPowerShellRequest(editor, dom) {
   } catch (error) {
     dom.stats.textContent = `Inpaint 解析失敗: ${error.message}`;
   }
+}
+
+function storeCanvasParsedRequest(parsed) {
+  state.canvasRequest = {
+    ...blankRequestState(),
+    ...state.canvasRequest,
+    powershell: parsed.powershell,
+    url: parsed.url,
+    method: parsed.method,
+    headers: parsed.headers,
+    bodyText: formatJsonString(parsed.bodyText),
+  };
 }
 
 function applyParsedCanvasRequestToForm(request, editor, dom) {
@@ -1611,14 +1600,13 @@ function applyParsedCanvasRequestToForm(request, editor, dom) {
 
 async function sendCanvasRequest(editor, dom) {
   const draft = buildCanvasEditorDraftFromDom(editor, dom);
-  const inheritedSource = [state.send.headers, state.query.headers, state.post.headers]
-    .find((headers) => headers && Object.keys(headers).length) || {};
-  const baseHeaders = sanitizeHeaders(inheritedSource);
+  const canvasRequest = state.canvasRequest || blankRequestState();
+  const baseHeaders = sanitizeHeaders(canvasRequest.headers || {});
 
   if (!Object.keys(baseHeaders).length) {
-    dom.stats.textContent = "找不到可用的 headers。請先在 Dashboard 貼一次 PowerShell 來繼承授權 cookie。";
+    dom.stats.textContent = "找不到 Canvas 專用 headers。請先在 Inpaint PowerShell 區解析一次請求。";
     dom.responseFold.open = true;
-    dom.response.textContent = "尚未送出：缺少 headers (authorization / cookie 等)。";
+    dom.response.textContent = "尚未送出：缺少 Canvas request headers。這不會讀取或覆蓋 Dashboard API 1。";
     return;
   }
 
@@ -1634,18 +1622,29 @@ async function sendCanvasRequest(editor, dom) {
   dom.stats.textContent = "送出中...";
 
   try {
-    const response = await fetch(draft.url, {
-      method: draft.method,
+    const bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
+    state.canvasRequest = {
+      ...blankRequestState(),
+      ...canvasRequest,
+      url: canvasRequest.url || draft.url,
+      method: canvasRequest.method || draft.method,
+      headers,
+      bodyText,
+    };
+    saveState();
+
+    const response = await fetch(state.canvasRequest.url || draft.url, {
+      method: state.canvasRequest.method,
       headers,
       mode: "cors",
       credentials: "include",
-      body: JSON.stringify(draft.body),
+      body: JSON.stringify(JSON.parse(bodyText)),
     });
     const text = await response.text();
     dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}`;
     dom.stats.textContent = `已送出 (HTTP ${response.status})`;
   } catch (error) {
-    dom.response.textContent = `Request 失敗: ${error.message}\n\nCORS 提示：\n- 確認瀏覽器擴充對 api.tensor.art 放行（含 OPTIONS preflight）\n- 改用「Apply to API 1」把 body 套到 Dashboard 後在那邊送`;
+    dom.response.textContent = `Request 失敗: ${error.message}\n\nCORS 提示：\n- Canvas Send 只使用 Canvas 自己解析出的 request，不會讀取或覆蓋 API 1\n- 若瀏覽器仍擋 api.tensor.art，請確認 CORS/OPTIONS preflight 是否已放行`;
     dom.stats.textContent = `送出失敗: ${error.message}`;
   } finally {
     dom.send.disabled = false;
