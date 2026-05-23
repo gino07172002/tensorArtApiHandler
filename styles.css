@@ -164,7 +164,7 @@ pre {
 }
 
 textarea,
-input,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
 .response-box {
   width: 100%;
   border: 1px solid rgba(94, 58, 31, 0.18);
@@ -326,7 +326,11 @@ button:hover {
   box-shadow: 0 12px 32px rgba(67, 37, 14, 0.1);
 }
 
-.gallery-card img {
+.gallery-img-wrap {
+  position: relative;
+}
+
+.gallery-img-wrap img {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 5;
@@ -459,15 +463,19 @@ button:hover {
 }
 
 .gallery-open-button {
-  flex: 0 0 auto;
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
   min-height: 0;
-  padding: 6px 10px;
+  padding: 5px 11px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   line-height: 1;
-  color: var(--muted);
-  background: rgba(108, 86, 72, 0.08);
-  border: 1px solid rgba(108, 86, 72, 0.16);
+  color: #fff7f1;
+  background: rgba(30, 15, 5, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .pill {
