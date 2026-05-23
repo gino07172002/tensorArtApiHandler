@@ -1,2 +1,3 @@
 node_modules/
 tests/e2e/canvas-shot*.png
+tests/e2e/gallery-shot*.png
