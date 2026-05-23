@@ -488,6 +488,10 @@ function initCanvasPage() {
     brushPopover: document.querySelector("#canvas-brush-popover"),
     brushSizeVal: document.querySelector("#canvas-brush-size-val"),
     brushOpacityVal: document.querySelector("#canvas-brush-opacity-val"),
+    inpaintPowerShell: document.querySelector("#canvas-inpaint-powershell"),
+    inpaintParse: document.querySelector("#canvas-inpaint-parse"),
+    inpaintHeaders: document.querySelector("#canvas-inpaint-headers"),
+    inpaintSourceSummary: document.querySelector("#canvas-inpaint-source-summary"),
   };
 
   if (!dom.canvas) return;
@@ -500,6 +504,7 @@ function initCanvasPage() {
   dom.file.addEventListener("change", (event) => loadCanvasBaseImage(event, editor, dom));
   dom.mode.addEventListener("change", () => updateCanvasBodyPreview(editor, dom));
   dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom));
+  dom.inpaintParse?.addEventListener("click", () => parseCanvasPowerShellRequest(editor, dom));
   dom.applyToSend.addEventListener("click", () => {
     const draft = buildCanvasEditorDraftFromDom(editor, dom);
     state.send.url = draft.url;
@@ -515,6 +520,7 @@ function initCanvasPage() {
   dom.send.addEventListener("click", () => sendCanvasRequest(editor, dom));
   dom.clearMask.addEventListener("click", () => {
     editor.maskCtx.clearRect(0, 0, editor.maskCanvas.width, editor.maskCanvas.height);
+    editor.sourceMaskUrl = "";
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
   });
@@ -1498,6 +1504,70 @@ function getCanvasInheritedHeaders() {
   return sanitizeHeaders(inherited);
 }
 
+function parseCanvasPowerShellRequest(editor, dom) {
+  try {
+    const parsed = parsePowerShellRequest(dom.inpaintPowerShell.value);
+    applyParsedCanvasRequestToForm(parsed, editor, dom);
+
+    state.send = {
+      ...blankRequestState(),
+      ...state.send,
+      powershell: parsed.powershell,
+      url: parsed.url,
+      method: parsed.method,
+      headers: parsed.headers,
+      bodyText: formatJsonString(parsed.bodyText),
+    };
+    saveState();
+
+    if (dom.inpaintHeaders) {
+      dom.inpaintHeaders.value = JSON.stringify(parsed.headers, null, 2);
+    }
+    if (dom.inpaintSourceSummary) {
+      dom.inpaintSourceSummary.textContent = buildSourcePreview(parsed);
+    }
+
+    if (editor.sourceImageUrl) {
+      loadCanvasImageUrlWithFallback(editor.sourceImageUrl, editor, dom);
+    }
+    resizeCanvasEditor(editor, dom);
+    renderCanvasEditor(editor);
+    dom.stats.textContent = "已解析 Inpaint PowerShell，origin 已從 headers 移除。";
+  } catch (error) {
+    dom.stats.textContent = `Inpaint 解析失敗: ${error.message}`;
+  }
+}
+
+function applyParsedCanvasRequestToForm(request, editor, dom) {
+  const payload = JSON.parse(request.bodyText || "{}");
+  const params = payload.params || {};
+  const baseModel = params.baseModel || {};
+  const mode = request.url.includes("task_by_image") || payload.taskType === "IMAGE_TO_INPAINT"
+    ? "inpaint"
+    : "img2img";
+
+  dom.mode.value = mode;
+  dom.prompt.value = params.prompt || "";
+  dom.negativePrompt.value = params.negativePrompt || "";
+  dom.width.value = String(params.width || "");
+  dom.height.value = String(params.height || "");
+  dom.steps.value = String(params.steps || "");
+  dom.cfgScale.value = String(params.cfgScale || "");
+  dom.seed.value = String(params.seed || "-1");
+  dom.denoisingStrength.value = String(params.denoisingStrength || "");
+  dom.modelId.value = String(baseModel.modelId || "");
+  dom.modelFileId.value = String(baseModel.modelFileId || "");
+  dom.body.value = formatJsonString(request.bodyText);
+
+  editor.imageDataUrl = payload.imageUrl || params.images?.[0] || "";
+  editor.sourceImageUrl = payload.imageUrl || params.images?.[0] || "";
+  editor.sourceMaskUrl = params.inpaint?.maskImage || "";
+  editor.imageId = payload.imageId || "";
+  editor.taskId = payload.taskId || payload.remixPostId || "";
+  editor.ksamplerName = params.ksamplerName || editor.ksamplerName || "euler_ancestral";
+  editor.schedule = params.schedule || editor.schedule || "normal";
+}
+
 async function sendCanvasRequest(editor, dom) {
   const draft = buildCanvasEditorDraftFromDom(editor, dom);
   const inheritedSource = [state.send.headers, state.query.headers, state.post.headers]
@@ -1625,6 +1695,7 @@ function createCanvasEditor(canvas, dom) {
     baseImage: null,
     imageDataUrl: "",
     sourceImageUrl: "",
+    sourceMaskUrl: "",
     imageId: "",
     taskId: "",
     ksamplerName: "euler_ancestral",
@@ -2078,6 +2149,7 @@ function drawCanvasStroke(from, to, editor, dom) {
   if (strokeMode === "none") return;
   let target;
   if (editor.layer === "mask") {
+    editor.sourceMaskUrl = "";
     target = editor.maskCtx;
   } else {
     const active = getActiveLayer(editor);
@@ -2234,7 +2306,7 @@ function buildCanvasEditorDraftFromDom(editor, dom) {
     prompt: dom.prompt.value,
     negativePrompt: dom.negativePrompt.value,
     imageDataUrl: exportCanvasImage(editor),
-    maskDataUrl: editor.maskCanvas.toDataURL("image/png"),
+    maskDataUrl: exportCanvasMask(editor),
     imageId: editor.imageId,
     remixPostId: editor.taskId,
     remixPostImageId: editor.imageId,
@@ -2282,6 +2354,22 @@ function exportCanvasImage(editor) {
   } catch {
     return editor.sourceImageUrl || editor.imageDataUrl || "";
   }
+}
+
+function exportCanvasMask(editor) {
+  if (editor.sourceMaskUrl && isCanvasBlank(editor.maskCanvas)) {
+    return editor.sourceMaskUrl;
+  }
+  return editor.maskCanvas.toDataURL("image/png");
+}
+
+function isCanvasBlank(canvas) {
+  const ctx = canvas.getContext("2d");
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 0) return false;
+  }
+  return true;
 }
 
 function updateCanvasBodyPreview(editor, dom) {
@@ -2600,5 +2688,3 @@ function escapeHtml(value) {
     .replaceAll("\"", "&quot;")
     .replaceAll("'", "&#39;");
 }
-
-

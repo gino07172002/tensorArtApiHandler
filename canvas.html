@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=canvas-remix-15">
+  <link rel="stylesheet" href="./styles.css?v=canvas-remix-16">
 </head>
 <body data-page="canvas">
   <div class="app-shell canvas-shell">
@@ -38,6 +38,23 @@
           <p class="eyebrow">Request</p>
           <h2>API Body</h2>
         </div>
+        <details id="canvas-inpaint-source-fold" class="source-fold">
+          <summary>
+            <span>Inpaint PowerShell</span>
+            <small id="canvas-inpaint-source-summary">Paste a task_by_image request</small>
+          </summary>
+          <label class="field">
+            <span>PowerShell</span>
+            <textarea id="canvas-inpaint-powershell" rows="4" placeholder="貼上 Inpaint / task_by_image PowerShell"></textarea>
+          </label>
+          <div class="button-row compact-row">
+            <button type="button" id="canvas-inpaint-parse" class="ghost-button">解析 Inpaint</button>
+          </div>
+          <label class="field">
+            <span>Parsed Headers</span>
+            <textarea id="canvas-inpaint-headers" rows="6" spellcheck="false" readonly></textarea>
+          </label>
+        </details>
         <div class="layer-panel paint-only" aria-label="Paint layers">
           <div class="layer-panel-header">
             <span class="field-label" style="margin:0">Layers</span>
@@ -183,6 +200,6 @@
     </main>
   </div>
 
-  <script type="module" src="./app.js?v=canvas-remix-15"></script>
+  <script type="module" src="./app.js?v=canvas-remix-16"></script>
 </body>
 </html>

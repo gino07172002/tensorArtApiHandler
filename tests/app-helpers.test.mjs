@@ -31,6 +31,7 @@ globalThis.__testExports = {
   createCanvasImageLoadAttempts,
   getCanvasStrokeMode,
   readCanvasColorAtPoint,
+  applyParsedCanvasRequestToForm,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState: () => state,
@@ -46,6 +47,7 @@ const {
   createCanvasImageLoadAttempts,
   getCanvasStrokeMode,
   readCanvasColorAtPoint,
+  applyParsedCanvasRequestToForm,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState,
@@ -213,6 +215,52 @@ const blockedColorRead = readCanvasColorAtPoint({
 }, { x: 10, y: 20 });
 assert.equal(blockedColorRead.color, "");
 assert.match(blockedColorRead.error, /CORS/);
+
+const canvasFormDom = {
+  mode: { value: "" },
+  prompt: { value: "" },
+  negativePrompt: { value: "" },
+  width: { value: "" },
+  height: { value: "" },
+  steps: { value: "" },
+  cfgScale: { value: "" },
+  seed: { value: "" },
+  denoisingStrength: { value: "" },
+  modelId: { value: "" },
+  modelFileId: { value: "" },
+  body: { value: "" },
+};
+const canvasEditor = {
+  imageDataUrl: "",
+  sourceImageUrl: "",
+  imageId: "",
+  taskId: "",
+  ksamplerName: "",
+  schedule: "",
+};
+const parsedInpaint = parsePowerShellRequest(`
+Invoke-WebRequest -Uri "https://api.tensor.art/works/v1/works/task_by_image" \`
+  -Method "POST" \`
+  -Headers @{
+    "authorization"="Bearer token"
+    "origin"="https://tensor.art"
+    "x-request-sign"="sig"
+  } \`
+  -ContentType "application/json" \`
+  -Body '{"params":{"baseModel":{"modelId":"111","modelFileId":"222"},"prompt":"p","negativePrompt":"n","height":1536,"width":1024,"steps":25,"cfgScale":5,"seed":"-1","denoisingStrength":0.75,"ksamplerName":"euler_ancestral","schedule":"normal","images":["https://example.test/base.jpg"],"inpaint":{"maskImage":"https://example.test/mask.png","maskBlur":4}},"taskType":"IMAGE_TO_INPAINT","imageUrl":"https://example.test/base.jpg","imageId":"image-9"}'
+`);
+applyParsedCanvasRequestToForm(parsedInpaint, canvasEditor, canvasFormDom);
+assert.equal(parsedInpaint.headers.origin, undefined);
+assert.equal(canvasFormDom.mode.value, "inpaint");
+assert.equal(canvasFormDom.prompt.value, "p");
+assert.equal(canvasFormDom.negativePrompt.value, "n");
+assert.equal(canvasFormDom.width.value, "1024");
+assert.equal(canvasFormDom.height.value, "1536");
+assert.equal(canvasFormDom.modelId.value, "111");
+assert.equal(canvasFormDom.modelFileId.value, "222");
+assert.equal(canvasEditor.sourceImageUrl, "https://example.test/base.jpg");
+assert.equal(canvasEditor.imageId, "image-9");
+assert.equal(JSON.parse(canvasFormDom.body.value).params.inpaint.maskImage, "https://example.test/mask.png");
 
 const canvasBase = {
   prompt: "portrait study",
