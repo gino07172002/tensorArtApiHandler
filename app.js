@@ -1648,7 +1648,20 @@ async function sendCanvasRequest(editor, dom) {
   dom.stats.textContent = "送出中...";
 
   try {
-    const bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
+    let bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
+    const payload = JSON.parse(bodyText);
+
+    if (dom.mode.value === "inpaint" && !isCanvasBlank(editor.maskCanvas)) {
+      dom.stats.textContent = "上傳 mask 中...";
+      const uploadedMaskUrl = await uploadMaskToTensor(editor, baseHeaders);
+      if (!payload.params) payload.params = {};
+      if (!payload.params.inpaint) payload.params.inpaint = {};
+      payload.params.inpaint.maskImage = uploadedMaskUrl;
+      bodyText = JSON.stringify(payload, null, 2);
+      dom.body.value = bodyText;
+      dom.stats.textContent = "Mask 上傳完成，送出 inpaint 請求...";
+    }
+
     state.canvasRequest = {
       ...blankRequestState(),
       ...canvasRequest,
@@ -1664,7 +1677,7 @@ async function sendCanvasRequest(editor, dom) {
       headers,
       mode: "cors",
       credentials: "include",
-      body: JSON.stringify(JSON.parse(bodyText)),
+      body: JSON.stringify(payload),
     });
     const text = await response.text();
     dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}`;
@@ -1675,6 +1688,57 @@ async function sendCanvasRequest(editor, dom) {
   } finally {
     dom.send.disabled = false;
   }
+}
+
+async function uploadMaskToTensor(editor, baseHeaders) {
+  const maskBlob = await renderMaskAsJpegBlob(editor);
+
+  const presignHeaders = { ...baseHeaders, "content-type": "application/json" };
+  const presignResp = await fetch("https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign", {
+    method: "POST",
+    headers: presignHeaders,
+    mode: "cors",
+    credentials: "include",
+    body: JSON.stringify({ scene: "IMAGE_TO_IMAGE", fileNameSuffix: "jpeg" }),
+  });
+  if (!presignResp.ok) {
+    throw new Error(`pre_sign 失敗 (HTTP ${presignResp.status}): ${await presignResp.text()}`);
+  }
+  const presignJson = await presignResp.json();
+  const uploadUrl = presignJson?.data?.uploadUrl;
+  const displayUrl = presignJson?.data?.displayUrl;
+  if (!uploadUrl || !displayUrl) {
+    throw new Error(`pre_sign 回傳格式異常: ${JSON.stringify(presignJson)}`);
+  }
+
+  const putResp = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "content-type": "image/jpeg" },
+    mode: "cors",
+    body: maskBlob,
+  });
+  if (!putResp.ok) {
+    throw new Error(`Mask PUT 失敗 (HTTP ${putResp.status})`);
+  }
+
+  return displayUrl;
+}
+
+function renderMaskAsJpegBlob(editor) {
+  return new Promise((resolve, reject) => {
+    const src = editor.maskCanvas;
+    const out = document.createElement("canvas");
+    out.width = src.width;
+    out.height = src.height;
+    const ctx = out.getContext("2d");
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(src, 0, 0);
+    out.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("無法將 mask 轉為 JPEG"));
+    }, "image/jpeg", 0.92);
+  });
 }
 
 function clampCanvasDim(value) {
