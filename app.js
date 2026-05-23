@@ -1651,18 +1651,19 @@ async function sendCanvasRequest(editor, dom) {
     let bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
     const payload = JSON.parse(bodyText);
 
-    const maskHasContent = !isCanvasBlank(editor.maskCanvas);
-    const modeIsInpaint = dom.mode.value === "inpaint";
-    if (modeIsInpaint && maskHasContent) {
+    if (dom.mode.value === "inpaint") {
       const currentMask = payload?.params?.inpaint?.maskImage || "";
-      if (currentMask.startsWith("data:")) {
+      if (editor.sourceMaskUrl && currentMask !== editor.sourceMaskUrl) {
+        if (!payload.params) payload.params = {};
+        if (!payload.params.inpaint) payload.params.inpaint = {};
+        payload.params.inpaint.maskImage = editor.sourceMaskUrl;
+      } else if (!editor.sourceMaskUrl && currentMask.startsWith("data:")) {
         throw new Error(
-          "你塗的 mask 需要上傳到 tensor.art 的 R2，但這個工具放在 GitHub Pages，被 CORS 擋住無法上傳。\n\n" +
-          "解法：\n" +
-          "(A) 在 tensor.art 上先塗好 mask 並送一次（讓它幫你產生 R2 mask URL），再把那份 PowerShell 貼進來，這個工具不重塗 mask 直接 Send 即可\n" +
-          "(B) 等之後做 Tampermonkey userscript 版本"
+          "尚未支援上傳新塗的 mask（被 CORS 擋）。請先在 tensor.art 塗 mask 並送一次，再貼那份 PowerShell。"
         );
       }
+      bodyText = JSON.stringify(payload, null, 2);
+      dom.body.value = bodyText;
     }
 
     state.canvasRequest = {
@@ -2501,7 +2502,7 @@ function exportCanvasImage(editor) {
 }
 
 function exportCanvasMask(editor) {
-  if (editor.sourceMaskUrl && isCanvasBlank(editor.maskCanvas)) {
+  if (editor.sourceMaskUrl) {
     return editor.sourceMaskUrl;
   }
   return editor.maskCanvas.toDataURL("image/png");
