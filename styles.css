@@ -338,12 +338,19 @@ button:hover {
 }
 
 .gallery-head,
-.gallery-meta,
-.gallery-selection {
+.gallery-meta {
   display: flex;
   justify-content: space-between;
   gap: 10px;
   align-items: center;
+}
+
+.gallery-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
 }
 
 .gallery-title {

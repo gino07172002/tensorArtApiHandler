@@ -939,8 +939,10 @@ function renderGallery(dom) {
             <span class="pill">${escapeHtml(entry.status || "UNKNOWN")}</span>
           </div>
           <div class="gallery-selection">
-            <button type="button" class="remix-button" data-action="remix-inpaint" data-index="${index}">Inpaint</button>
-            <button type="button" class="remix-button" data-action="remix-img2img" data-index="${index}">Img2Img</button>
+            <button type="button" class="remix-button" data-action="copy-to-send" data-index="${index}" title="複製生成參數到 API 1 (seed=-1)">Remix</button>
+            <button type="button" class="remix-button" data-action="copy-to-send-seed" data-index="${index}" title="複製生成參數到 API 1 (保留 seed)">Remix+Seed</button>
+            <button type="button" class="remix-button" data-action="remix-inpaint" data-index="${index}" title="帶圖到 Canvas 做 Inpaint">Inpaint</button>
+            <button type="button" class="remix-button" data-action="remix-img2img" data-index="${index}" title="帶圖到 Canvas 做 Img2Img">Img2Img</button>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
@@ -1043,8 +1045,8 @@ async function handleGalleryAction(action, index, dom) {
     return;
   }
 
-  if (action === "copy-to-send") {
-    copyGenerationToSendBody(entry, dom);
+  if (action === "copy-to-send" || action === "copy-to-send-seed") {
+    copyGenerationToSendBody(entry, dom, { includeSeed: action === "copy-to-send-seed" });
     return;
   }
 
@@ -1113,12 +1115,13 @@ async function handleGalleryAction(action, index, dom) {
   }
 }
 
-function copyGenerationToSendBody(entry, dom) {
+function copyGenerationToSendBody(entry, dom, options = {}) {
+  const includeSeed = options.includeSeed !== undefined ? options.includeSeed : state.queryResultCopySeed;
   try {
     state.send.bodyText = applyGenerationMetadataToBody(
       state.send.bodyText,
       entry.metadata,
-      { includeSeed: state.queryResultCopySeed },
+      { includeSeed },
     );
     saveState();
 
@@ -1126,7 +1129,7 @@ function copyGenerationToSendBody(entry, dom) {
       renderRequestSection("send", dom.sendSection);
     }
 
-    dom.stats.textContent = state.queryResultCopySeed
+    dom.stats.textContent = includeSeed
       ? "已複製生成資料到 API 1 Body（包含 seed）。"
       : "已複製生成資料到 API 1 Body（seed 已設為 -1）。";
   } catch (error) {
