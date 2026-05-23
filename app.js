@@ -1651,7 +1651,10 @@ async function sendCanvasRequest(editor, dom) {
     let bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
     const payload = JSON.parse(bodyText);
 
-    if (dom.mode.value === "inpaint" && !isCanvasBlank(editor.maskCanvas)) {
+    const maskHasContent = !isCanvasBlank(editor.maskCanvas);
+    const modeIsInpaint = dom.mode.value === "inpaint";
+    console.log("[Canvas Send] mode:", dom.mode.value, "maskHasContent:", maskHasContent);
+    if (modeIsInpaint && maskHasContent) {
       dom.stats.textContent = "上傳 mask 中...";
       const uploadedMaskUrl = await uploadMaskToTensor(editor, baseHeaders);
       if (!payload.params) payload.params = {};
