@@ -484,6 +484,10 @@ function initCanvasPage() {
     layerUp: document.querySelector("#canvas-layer-up"),
     layerDown: document.querySelector("#canvas-layer-down"),
     activeLayerName: document.querySelector("#canvas-active-layer-name"),
+    pick: document.querySelector("#canvas-pick"),
+    brushPopover: document.querySelector("#canvas-brush-popover"),
+    brushSizeVal: document.querySelector("#canvas-brush-size-val"),
+    brushOpacityVal: document.querySelector("#canvas-brush-opacity-val"),
   };
 
   if (!dom.canvas) return;
@@ -523,11 +527,44 @@ function initCanvasPage() {
 
   dom.toolButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      editor.tool = button.dataset.canvasTool;
+      const tool = button.dataset.canvasTool;
+      const alreadyActive = editor.tool === tool;
+      editor.tool = tool;
       dom.toolButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+      if (dom.brushPopover) {
+        if (tool === "brush") {
+          dom.brushPopover.hidden = alreadyActive ? !dom.brushPopover.hidden : false;
+        } else {
+          dom.brushPopover.hidden = true;
+        }
+      }
       renderCanvasEditor(editor);
     });
   });
+
+  if (dom.brushPopover) {
+    document.addEventListener("pointerdown", (event) => {
+      if (dom.brushPopover.hidden) return;
+      if (dom.brushPopover.contains(event.target)) return;
+      if (event.target.closest('[data-canvas-tool="brush"]')) return;
+      dom.brushPopover.hidden = true;
+    });
+  }
+
+  if (dom.brushSize && dom.brushSizeVal) {
+    const updateSize = () => { dom.brushSizeVal.textContent = dom.brushSize.value; };
+    dom.brushSize.addEventListener("input", updateSize);
+    updateSize();
+  }
+  if (dom.brushOpacity && dom.brushOpacityVal) {
+    const updateOpacity = () => { dom.brushOpacityVal.textContent = dom.brushOpacity.value; };
+    dom.brushOpacity.addEventListener("input", updateOpacity);
+    updateOpacity();
+  }
+
+  if (dom.pick) {
+    dom.pick.addEventListener("click", () => runColorPicker(dom));
+  }
 
   dom.layerButtons.forEach((button) => {
     button.addEventListener("click", () => {
@@ -599,6 +636,9 @@ function initCanvasPage() {
   if (dom.stageSize) {
     dom.stageSize.textContent = `${editor.canvas.width}×${editor.canvas.height}`;
   }
+
+  requestAnimationFrame(() => fitCanvasDisplay(editor));
+  window.addEventListener("resize", () => fitCanvasDisplay(editor));
 
   dom.canvas.addEventListener("pointerdown", (event) => handleCanvasPointerDown(event, editor, dom));
   dom.canvas.addEventListener("pointermove", (event) => handleCanvasPointerMove(event, editor, dom));
@@ -1482,6 +1522,23 @@ function clampCanvasDim(value) {
   return Math.max(64, Math.min(4096, n));
 }
 
+function fitCanvasDisplay(editor) {
+  const canvas = editor.canvas;
+  const frame = canvas.parentElement;
+  if (!frame) return;
+  const aw = canvas.width;
+  const ah = canvas.height;
+  if (!aw || !ah) return;
+  const fw = frame.clientWidth || aw;
+  const fh = frame.clientHeight || ah;
+  if (!fw || !fh) return;
+  const scale = Math.min(fw / aw, fh / ah, 1);
+  const displayW = Math.max(1, Math.floor(aw * scale));
+  const displayH = Math.max(1, Math.floor(ah * scale));
+  canvas.style.width = `${displayW}px`;
+  canvas.style.height = `${displayH}px`;
+}
+
 function resizeCanvasEditor(editor, dom) {
   const nextW = clampCanvasDim(Number(dom.width.value) || editor.canvas.width);
   const nextH = clampCanvasDim(Number(dom.height.value) || editor.canvas.height);
@@ -1514,6 +1571,7 @@ function resizeCanvasEditor(editor, dom) {
     dom.stageSize.textContent = `${nextW}×${nextH}`;
   }
 
+  fitCanvasDisplay(editor);
   renderCanvasEditor(editor);
 }
 
@@ -1795,30 +1853,25 @@ function loadCanvasImageUrl(url, editor, dom) {
   image.src = url;
 }
 
+function runColorPicker(dom) {
+  if ("EyeDropper" in window) {
+    dom.stats.textContent = "Pick a color from the screen.";
+    new window.EyeDropper().open()
+      .then((result) => {
+        dom.color.value = result.sRGBHex;
+        dom.stats.textContent = `Picked ${result.sRGBHex}`;
+      })
+      .catch(() => {
+        dom.stats.textContent = "Color pick cancelled.";
+      });
+  } else {
+    dom.color?.click();
+  }
+}
+
 function handleCanvasPointerDown(event, editor, dom) {
   const point = canvasEventPoint(event, editor.canvas);
   editor.canvas.setPointerCapture?.(event.pointerId);
-
-  if (editor.tool === "eyedropper") {
-    const picked = readCanvasColorAtPoint(editor.ctx, point);
-    if (picked.color) {
-      dom.color.value = picked.color;
-      dom.stats.textContent = `Picked ${picked.color}`;
-    } else if ("EyeDropper" in window) {
-      dom.stats.textContent = "Pick a color from the screen.";
-      new window.EyeDropper().open()
-        .then((result) => {
-          dom.color.value = result.sRGBHex;
-          dom.stats.textContent = `Picked ${result.sRGBHex}`;
-        })
-        .catch(() => {
-          dom.stats.textContent = picked.error || "Could not pick a color from this image.";
-        });
-    } else {
-      dom.stats.textContent = picked.error || "Could not pick a color from this image.";
-    }
-    return;
-  }
 
   if (editor.tool === "move" && editor.baseImage) {
     const handle = hitTestCanvasHandle(point, editor);

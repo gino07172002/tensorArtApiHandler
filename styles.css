@@ -528,6 +528,61 @@ button:hover {
   background: var(--accent);
 }
 
+.brush-tool-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.brush-popover {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 0;
+  z-index: 50;
+  display: grid;
+  gap: 10px;
+  width: 220px;
+  padding: 12px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.brush-popover[hidden] {
+  display: none;
+}
+
+.popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.popover-row > span {
+  width: 54px;
+  flex-shrink: 0;
+}
+
+.popover-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.popover-row output {
+  width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.popover-row input[type="color"] {
+  flex: 1;
+  height: 32px;
+  padding: 2px;
+}
+
 .transform-mini {
   display: grid;
   grid-template-columns: 1fr;
@@ -575,20 +630,21 @@ button:hover {
 
 .canvas-stage-panel {
   min-width: 0;
-  min-height: calc(100vh - 230px);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 14px;
+  height: calc(100vh - 28px);
+  align-self: start;
 }
 
 .stage-frame {
-  margin-top: 16px;
-  padding: 16px;
-  background:
-    repeating-conic-gradient(rgba(36, 22, 15, 0.04) 0 25%, transparent 0 50%) 0 0 / 24px 24px,
-    #efe9da;
-  border-radius: 12px;
+  margin-top: 12px;
+  flex: 1;
+  min-height: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: auto;
 }
 
 .stage-size {
@@ -716,7 +772,7 @@ button:hover {
 .editor-canvas {
   display: block;
   max-width: 100%;
-  max-height: calc(100vh - 320px);
+  max-height: 100%;
   margin: 0;
   border: 1px solid rgba(36, 22, 15, 0.28);
   border-radius: 6px;
