@@ -477,6 +477,13 @@ function initCanvasPage() {
     responseFold: document.querySelector("#canvas-response-fold"),
     clearMask: document.querySelector("#canvas-clear-mask"),
     clearPaint: document.querySelector("#canvas-clear-paint"),
+    stageSize: document.querySelector("#canvas-stage-size"),
+    layerList: document.querySelector("#canvas-layer-list"),
+    layerAdd: document.querySelector("#canvas-layer-add"),
+    layerRemove: document.querySelector("#canvas-layer-remove"),
+    layerUp: document.querySelector("#canvas-layer-up"),
+    layerDown: document.querySelector("#canvas-layer-down"),
+    activeLayerName: document.querySelector("#canvas-active-layer-name"),
   };
 
   if (!dom.canvas) return;
@@ -508,7 +515,8 @@ function initCanvasPage() {
     updateCanvasBodyPreview(editor, dom);
   });
   dom.clearPaint.addEventListener("click", () => {
-    editor.paintCtx.clearRect(0, 0, editor.paintCanvas.width, editor.paintCanvas.height);
+    const active = getActiveLayer(editor);
+    active.ctx.clearRect(0, 0, active.canvas.width, active.canvas.height);
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
   });
@@ -529,6 +537,35 @@ function initCanvasPage() {
     });
   });
 
+  if (dom.layerList) {
+    renderLayerPanel(editor, dom);
+    dom.layerAdd?.addEventListener("click", () => {
+      editor.layerCounter += 1;
+      const next = createPaintLayer(`Layer ${editor.layerCounter}`, editor.canvas.width, editor.canvas.height);
+      const activeIndex = editor.layers.findIndex((l) => l.id === editor.activeLayerId);
+      editor.layers.splice(activeIndex + 1, 0, next);
+      editor.activeLayerId = next.id;
+      renderLayerPanel(editor, dom);
+      renderCanvasEditor(editor);
+      updateCanvasBodyPreview(editor, dom);
+    });
+    dom.layerRemove?.addEventListener("click", () => {
+      if (editor.layers.length <= 1) {
+        dom.stats.textContent = "至少要保留一個圖層。";
+        return;
+      }
+      const idx = editor.layers.findIndex((l) => l.id === editor.activeLayerId);
+      editor.layers.splice(idx, 1);
+      const nextIdx = Math.min(idx, editor.layers.length - 1);
+      editor.activeLayerId = editor.layers[nextIdx].id;
+      renderLayerPanel(editor, dom);
+      renderCanvasEditor(editor);
+      updateCanvasBodyPreview(editor, dom);
+    });
+    dom.layerUp?.addEventListener("click", () => moveActiveLayer(editor, dom, 1));
+    dom.layerDown?.addEventListener("click", () => moveActiveLayer(editor, dom, -1));
+  }
+
   [dom.x, dom.y, dom.scale, dom.rotation].forEach((input) => {
     input.addEventListener("input", () => {
       editor.transform.x = Number(dom.x.value);
@@ -542,8 +579,6 @@ function initCanvasPage() {
   [
     dom.prompt,
     dom.negativePrompt,
-    dom.width,
-    dom.height,
     dom.steps,
     dom.cfgScale,
     dom.seed,
@@ -553,6 +588,17 @@ function initCanvasPage() {
   ].forEach((input) => {
     input.addEventListener("input", () => updateCanvasBodyPreview(editor, dom));
   });
+
+  [dom.width, dom.height].forEach((input) => {
+    input.addEventListener("input", () => {
+      resizeCanvasEditor(editor, dom);
+      updateCanvasBodyPreview(editor, dom);
+    });
+  });
+
+  if (dom.stageSize) {
+    dom.stageSize.textContent = `${editor.canvas.width}×${editor.canvas.height}`;
+  }
 
   dom.canvas.addEventListener("pointerdown", (event) => handleCanvasPointerDown(event, editor, dom));
   dom.canvas.addEventListener("pointermove", (event) => handleCanvasPointerMove(event, editor, dom));
@@ -1431,24 +1477,64 @@ async function sendCanvasRequest(editor, dom) {
   }
 }
 
+function clampCanvasDim(value) {
+  const n = Math.round(Number(value) || 0);
+  return Math.max(64, Math.min(4096, n));
+}
+
+function resizeCanvasEditor(editor, dom) {
+  const nextW = clampCanvasDim(Number(dom.width.value) || editor.canvas.width);
+  const nextH = clampCanvasDim(Number(dom.height.value) || editor.canvas.height);
+  if (nextW === editor.canvas.width && nextH === editor.canvas.height) return;
+
+  editor.layers = editor.layers.map((layer) => {
+    const next = document.createElement("canvas");
+    next.width = nextW;
+    next.height = nextH;
+    next.getContext("2d").drawImage(layer.canvas, 0, 0);
+    return { ...layer, canvas: next, ctx: next.getContext("2d") };
+  });
+
+  const newMask = document.createElement("canvas");
+  newMask.width = nextW;
+  newMask.height = nextH;
+  newMask.getContext("2d").drawImage(editor.maskCanvas, 0, 0);
+
+  editor.canvas.width = nextW;
+  editor.canvas.height = nextH;
+  editor.maskCanvas = newMask;
+  editor.maskCtx = newMask.getContext("2d");
+
+  editor.transform.x = Math.round(nextW / 2);
+  editor.transform.y = Math.round(nextH / 2);
+  dom.x.value = String(editor.transform.x);
+  dom.y.value = String(editor.transform.y);
+
+  if (dom.stageSize) {
+    dom.stageSize.textContent = `${nextW}×${nextH}`;
+  }
+
+  renderCanvasEditor(editor);
+}
+
 function createCanvasEditor(canvas, dom) {
-  const paintCanvas = document.createElement("canvas");
   const maskCanvas = document.createElement("canvas");
-  const width = 1024;
-  const height = 768;
+  const width = clampCanvasDim(Number(dom.width.value) || 1024);
+  const height = clampCanvasDim(Number(dom.height.value) || 768);
 
   canvas.width = width;
   canvas.height = height;
-  paintCanvas.width = width;
-  paintCanvas.height = height;
   maskCanvas.width = width;
   maskCanvas.height = height;
+
+  const firstLayer = createPaintLayer("Layer 1", width, height);
 
   return {
     canvas,
     ctx: canvas.getContext("2d"),
-    paintCanvas,
-    paintCtx: paintCanvas.getContext("2d"),
+    layers: [firstLayer],
+    activeLayerId: firstLayer.id,
+    layerCounter: 1,
     maskCanvas,
     maskCtx: maskCanvas.getContext("2d"),
     baseImage: null,
@@ -1468,6 +1554,99 @@ function createCanvasEditor(canvas, dom) {
       rotation: Number(dom.rotation.value),
     },
   };
+}
+
+function createPaintLayer(name, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return {
+    id: `layer-${Math.random().toString(36).slice(2, 9)}`,
+    name,
+    visible: true,
+    canvas,
+    ctx: canvas.getContext("2d"),
+  };
+}
+
+function getActiveLayer(editor) {
+  return editor.layers.find((layer) => layer.id === editor.activeLayerId) || editor.layers[0];
+}
+
+function moveActiveLayer(editor, dom, delta) {
+  const idx = editor.layers.findIndex((l) => l.id === editor.activeLayerId);
+  const target = idx + delta;
+  if (idx < 0 || target < 0 || target >= editor.layers.length) return;
+  const [moved] = editor.layers.splice(idx, 1);
+  editor.layers.splice(target, 0, moved);
+  renderLayerPanel(editor, dom);
+  renderCanvasEditor(editor);
+  updateCanvasBodyPreview(editor, dom);
+}
+
+function renderLayerPanel(editor, dom) {
+  if (!dom.layerList) return;
+  dom.layerList.innerHTML = "";
+
+  for (let i = editor.layers.length - 1; i >= 0; i -= 1) {
+    const layer = editor.layers[i];
+    const li = document.createElement("li");
+    li.className = "layer-item" + (layer.id === editor.activeLayerId ? " is-active" : "");
+    li.dataset.layerId = layer.id;
+
+    const vis = document.createElement("button");
+    vis.type = "button";
+    vis.className = "layer-visibility" + (layer.visible ? "" : " is-hidden");
+    vis.title = layer.visible ? "Hide layer" : "Show layer";
+    vis.textContent = layer.visible ? "👁" : "🚫";
+    vis.addEventListener("click", (event) => {
+      event.stopPropagation();
+      layer.visible = !layer.visible;
+      renderLayerPanel(editor, dom);
+      renderCanvasEditor(editor);
+      updateCanvasBodyPreview(editor, dom);
+    });
+
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "layer-name";
+    name.value = layer.name;
+    name.readOnly = true;
+    name.addEventListener("dblclick", () => {
+      name.readOnly = false;
+      name.focus();
+      name.select();
+    });
+    name.addEventListener("blur", () => {
+      layer.name = name.value.trim() || layer.name;
+      name.value = layer.name;
+      name.readOnly = true;
+      if (layer.id === editor.activeLayerId && dom.activeLayerName) {
+        dom.activeLayerName.textContent = layer.name;
+      }
+    });
+    name.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        name.blur();
+      } else if (event.key === "Escape") {
+        name.value = layer.name;
+        name.blur();
+      }
+    });
+
+    li.addEventListener("click", () => {
+      editor.activeLayerId = layer.id;
+      renderLayerPanel(editor, dom);
+    });
+
+    li.append(vis, name);
+    dom.layerList.append(li);
+  }
+
+  if (dom.activeLayerName) {
+    dom.activeLayerName.textContent = getActiveLayer(editor).name;
+  }
 }
 
 function loadCanvasBaseImage(event, editor, dom) {
@@ -1798,7 +1977,17 @@ function drawCanvasStroke(from, to, editor, dom) {
   const opacity = Number(dom.brushOpacity.value || 70) / 100;
   const strokeMode = getCanvasStrokeMode(editor);
   if (strokeMode === "none") return;
-  const target = editor.layer === "mask" ? editor.maskCtx : editor.paintCtx;
+  let target;
+  if (editor.layer === "mask") {
+    target = editor.maskCtx;
+  } else {
+    const active = getActiveLayer(editor);
+    if (!active.visible) {
+      active.visible = true;
+      renderLayerPanel(editor, dom);
+    }
+    target = active.ctx;
+  }
 
   target.save();
   target.lineCap = "round";
@@ -1843,14 +2032,16 @@ function renderCanvasEditor(editor) {
     ctx.restore();
   }
 
+  editor.layers.forEach((layer) => {
+    if (layer.visible) ctx.drawImage(layer.canvas, 0, 0);
+  });
+
   if (editor.layer === "mask") {
     ctx.save();
     ctx.globalAlpha = 0.72;
     ctx.globalCompositeOperation = "source-over";
     ctx.drawImage(tintCanvas(editor.maskCanvas, "#111111"), 0, 0);
     ctx.restore();
-  } else {
-    ctx.drawImage(editor.paintCanvas, 0, 0);
   }
 
   if (editor.tool === "move" && editor.baseImage) {
@@ -1984,7 +2175,9 @@ function exportCanvasImage(editor) {
     ctx.restore();
   }
 
-  ctx.drawImage(editor.paintCanvas, 0, 0);
+  editor.layers.forEach((layer) => {
+    if (layer.visible) ctx.drawImage(layer.canvas, 0, 0);
+  });
   try {
     return output.toDataURL("image/png");
   } catch {

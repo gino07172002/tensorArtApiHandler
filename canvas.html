@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=canvas-remix-7">
+  <link rel="stylesheet" href="./styles.css?v=canvas-remix-9">
 </head>
 <body data-page="canvas">
   <div class="app-shell canvas-shell">
@@ -33,80 +33,23 @@
     </nav>
 
     <main class="canvas-workbench">
-      <aside class="canvas-toolbar panel">
-        <div>
-          <p class="eyebrow">Tools</p>
-          <h2>Tools</h2>
-        </div>
-        <label class="field">
-          <span>Local image</span>
-          <input id="canvas-file" type="file" accept="image/*">
-        </label>
-        <div>
-          <span class="field-label">Layer</span>
-          <div class="layer-toggle" aria-label="Canvas layer">
-            <button type="button" class="layer-button is-active" data-canvas-layer="paint">Paint</button>
-            <button type="button" class="layer-button" data-canvas-layer="mask">Mask</button>
-          </div>
-        </div>
-        <div class="tool-grid" aria-label="Canvas tools">
-          <button type="button" class="tool-button is-active" data-canvas-tool="move">Move</button>
-          <button type="button" class="tool-button" data-canvas-tool="brush">Brush</button>
-          <button type="button" class="tool-button" data-canvas-tool="eraser">Erase</button>
-          <button type="button" class="tool-button" data-canvas-tool="eyedropper">Pick</button>
-        </div>
-        <label class="field">
-          <span>Brush size</span>
-          <input id="canvas-brush-size" type="range" min="2" max="120" value="28">
-        </label>
-        <label class="field">
-          <span>Opacity</span>
-          <input id="canvas-brush-opacity" type="range" min="5" max="100" value="70">
-        </label>
-        <label class="field">
-          <span>Brush color</span>
-          <input id="canvas-color" type="color" value="#d9480f">
-        </label>
-        <div class="button-row compact-row">
-          <button type="button" id="canvas-clear-mask" class="ghost-button">Clear Mask</button>
-          <button type="button" id="canvas-clear-paint" class="ghost-button">Clear Paint</button>
-        </div>
-      </aside>
-
-      <section class="canvas-stage-panel panel">
-        <div class="panel-header">
-          <div>
-            <p class="eyebrow">Stage</p>
-            <h2>Stage</h2>
-          </div>
-          <p id="canvas-stats" class="canvas-status">Load an image or send one from Query Results.</p>
-        </div>
-        <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
-        <p class="canvas-hint">Move 工具下：拖曳圖片內部=平移、四角=縮放、頂端圓點=旋轉。</p>
-        <div class="transform-grid">
-          <label class="field">
-            <span>X</span>
-            <input id="canvas-x" type="number" value="512">
-          </label>
-          <label class="field">
-            <span>Y</span>
-            <input id="canvas-y" type="number" value="384">
-          </label>
-          <label class="field">
-            <span>Scale %</span>
-            <input id="canvas-scale" type="number" min="5" max="400" value="100">
-          </label>
-          <label class="field">
-            <span>Rotate</span>
-            <input id="canvas-rotation" type="number" min="-180" max="180" value="0">
-          </label>
-        </div>
-      </section>
-
       <aside class="canvas-inspector panel">
         <div>
           <p class="eyebrow">Request</p>
           <h2>API Body</h2>
+        </div>
+        <div class="layer-panel" aria-label="Paint layers">
+          <div class="layer-panel-header">
+            <span class="field-label" style="margin:0">Layers</span>
+            <div class="layer-actions">
+              <button type="button" id="canvas-layer-add" class="icon-button" title="Add layer" aria-label="Add layer">＋</button>
+              <button type="button" id="canvas-layer-up" class="icon-button" title="Move up" aria-label="Move up">↑</button>
+              <button type="button" id="canvas-layer-down" class="icon-button" title="Move down" aria-label="Move down">↓</button>
+              <button type="button" id="canvas-layer-remove" class="icon-button" title="Delete layer" aria-label="Delete layer">−</button>
+            </div>
+          </div>
+          <ul id="canvas-layer-list" class="layer-list"></ul>
+          <p class="layer-hint">筆刷會畫到 <strong id="canvas-active-layer-name">Layer 1</strong>。雙擊名稱可重命名。</p>
         </div>
         <label class="field">
           <span>Mode</span>
@@ -160,7 +103,7 @@
         <div class="button-row">
           <button type="button" id="canvas-build" class="ghost-button">Update Body</button>
           <button type="button" id="canvas-apply-send" class="ghost-button">Apply to API 1</button>
-          <button type="button" id="canvas-send" class="primary-button">Send to TensorArt</button>
+          <button type="button" id="canvas-send" class="primary-button">Send</button>
         </div>
         <label class="field">
           <span>Body Preview</span>
@@ -171,9 +114,71 @@
           <pre id="canvas-response" class="response-box">尚未送出。</pre>
         </details>
       </aside>
+
+      <aside class="canvas-toolbar panel icon-toolbar">
+        <label class="icon-field" title="Load local image">
+          <span class="icon-label" aria-hidden="true">📁</span>
+          <span class="sr-only">Local image</span>
+          <input id="canvas-file" type="file" accept="image/*">
+        </label>
+
+        <div class="icon-toggle" aria-label="Layer">
+          <button type="button" class="icon-button is-active" data-canvas-layer="paint" title="Paint layer" aria-label="Paint layer">🎨</button>
+          <button type="button" class="icon-button" data-canvas-layer="mask" title="Mask layer" aria-label="Mask layer">🩹</button>
+        </div>
+
+        <div class="icon-toggle icon-tools" aria-label="Tool">
+          <button type="button" class="icon-button is-active" data-canvas-tool="move" title="Move / transform" aria-label="Move">✥</button>
+          <button type="button" class="icon-button" data-canvas-tool="brush" title="Brush" aria-label="Brush">🖌</button>
+          <button type="button" class="icon-button" data-canvas-tool="eraser" title="Erase" aria-label="Erase">🧽</button>
+          <button type="button" class="icon-button" data-canvas-tool="eyedropper" title="Pick color" aria-label="Pick color">💧</button>
+        </div>
+
+        <label class="icon-field" title="Brush size">
+          <span class="icon-label" aria-hidden="true">⊙</span>
+          <span class="sr-only">Brush size</span>
+          <input id="canvas-brush-size" type="range" min="2" max="120" value="28">
+        </label>
+        <label class="icon-field" title="Opacity">
+          <span class="icon-label" aria-hidden="true">◐</span>
+          <span class="sr-only">Opacity</span>
+          <input id="canvas-brush-opacity" type="range" min="5" max="100" value="70">
+        </label>
+        <label class="icon-field" title="Brush color">
+          <span class="icon-label" aria-hidden="true">●</span>
+          <span class="sr-only">Brush color</span>
+          <input id="canvas-color" type="color" value="#d9480f">
+        </label>
+
+        <div class="icon-toggle">
+          <button type="button" id="canvas-clear-paint" class="icon-button" title="Clear paint" aria-label="Clear paint">⌫</button>
+          <button type="button" id="canvas-clear-mask" class="icon-button" title="Clear mask" aria-label="Clear mask">⌧</button>
+        </div>
+
+        <div class="transform-mini" aria-label="Transform">
+          <label title="X position"><span aria-hidden="true">X</span><input id="canvas-x" type="number" value="512"></label>
+          <label title="Y position"><span aria-hidden="true">Y</span><input id="canvas-y" type="number" value="384"></label>
+          <label title="Scale %"><span aria-hidden="true">⤢</span><input id="canvas-scale" type="number" min="5" max="400" value="100"></label>
+          <label title="Rotate"><span aria-hidden="true">⟳</span><input id="canvas-rotation" type="number" min="-180" max="180" value="0"></label>
+        </div>
+      </aside>
+
+      <section class="canvas-stage-panel panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Stage</p>
+            <h2>Stage <span id="canvas-stage-size" class="stage-size">1024×768</span></h2>
+          </div>
+          <p id="canvas-stats" class="canvas-status">Load an image or send one from Query Results.</p>
+        </div>
+        <div class="stage-frame">
+          <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
+        </div>
+        <p class="canvas-hint">畫布尺寸 = API 的 width × height。畫布外的內容不會被送出。Move 工具下可拖曳圖片內部=平移、四角=縮放、頂端圓點=旋轉。</p>
+      </section>
     </main>
   </div>
 
-  <script type="module" src="./app.js?v=canvas-remix-7"></script>
+  <script type="module" src="./app.js?v=canvas-remix-9"></script>
 </body>
 </html>
