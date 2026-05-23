@@ -318,7 +318,8 @@ button:hover {
 }
 
 .gallery-card {
-  overflow: hidden;
+  position: relative;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 22px;
   background: rgba(255, 252, 246, 0.96);
@@ -330,6 +331,7 @@ button:hover {
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: cover;
+  border-radius: 22px 22px 0 0;
   background: linear-gradient(135deg, rgba(196, 79, 43, 0.15), rgba(214, 161, 94, 0.15));
 }
 
@@ -342,7 +344,18 @@ button:hover {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.gallery-head {
+  padding-right: 92px;
+}
+
+.gallery-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 .gallery-selection {
@@ -350,13 +363,18 @@ button:hover {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-top: 8px;
+  justify-content: flex-start;
+  margin-top: 10px;
 }
 
 .gallery-title {
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   font-family: "Space Grotesk", sans-serif;
   font-size: 1rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .remix-button {
@@ -370,6 +388,9 @@ button:hover {
 }
 
 .gallery-action-menu {
+  position: absolute;
+  top: 14px;
+  right: 14px;
   flex: 0 0 auto;
 }
 
@@ -383,10 +404,13 @@ button:hover {
 }
 
 .gallery-action-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
   display: grid;
   gap: 6px;
   min-width: 160px;
-  margin-top: 8px;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -395,7 +419,7 @@ button:hover {
 }
 
 .gallery-action-menu[open] {
-  flex-basis: 100%;
+  flex-basis: auto;
 }
 
 .gallery-action-list button {
@@ -414,7 +438,13 @@ button:hover {
   align-items: center;
   min-width: 0;
   gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(196, 79, 43, 0.14);
+  border-radius: 999px;
+  background: rgba(196, 79, 43, 0.08);
   font-size: 0.875rem;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
 }
 

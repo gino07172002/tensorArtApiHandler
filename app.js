@@ -925,48 +925,6 @@ function bindGalleryOptions(dom) {
   });
 }
 
-function renderGalleryLegacy(dom) {
-  dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
-
-  if (!state.galleryItems.length) {
-    dom.stats.textContent = "目前沒有查詢結果。";
-    dom.root.innerHTML = "";
-    return;
-  }
-
-  dom.stats.textContent = `共 ${state.galleryItems.length} 張圖片，可直接送到 Canvas Editor 做 Inpaint 或 Img2Img。`;
-  dom.root.innerHTML = state.galleryItems.map((entry, index) => {
-    return `
-      <article class="gallery-card">
-        <img src="${escapeHtml(entry.url)}" alt="Task ${escapeHtml(entry.taskId)}">
-        <div class="gallery-body">
-          <div class="gallery-head">
-            <h3 class="gallery-title">Task ${escapeHtml(entry.taskId)}</h3>
-            <span class="pill">${escapeHtml(entry.status || "UNKNOWN")}</span>
-          </div>
-          <div class="gallery-selection">
-            <button type="button" class="remix-button" data-action="copy-to-send" data-index="${index}" title="複製生成參數到 API 1 (seed=-1)">Remix</button>
-            <button type="button" class="remix-button" data-action="copy-to-send-seed" data-index="${index}" title="複製生成參數到 API 1 (保留 seed)">Remix+Seed</button>
-            <button type="button" class="remix-button" data-action="remix-inpaint" data-index="${index}" title="帶圖到 Canvas 做 Inpaint">Inpaint</button>
-            <button type="button" class="remix-button" data-action="remix-img2img" data-index="${index}" title="帶圖到 Canvas 做 Img2Img">Img2Img</button>
-          </div>
-          <div class="gallery-meta">
-            <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
-            <span class="pill">${escapeHtml(entry.metadata.size || "-")}</span>
-          </div>
-          <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
-          <div class="gallery-actions">
-            <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
-          </div>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  dom.root.querySelectorAll("button[data-action]").forEach((button) => {
-    button.addEventListener("click", () => handleGalleryAction(button.dataset.action, Number(button.dataset.index), dom));
-  });
-}
 
 function renderGallery(dom) {
   dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
@@ -2052,6 +2010,7 @@ function loadCanvasImageUrl(url, editor, dom) {
   };
   image.src = url;
 }
+
 
 function runColorPicker(dom) {
   if ("EyeDropper" in window) {
