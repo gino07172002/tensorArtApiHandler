@@ -196,13 +196,18 @@ const galleryHead = galleryRoot.innerHTML.match(/<div class="gallery-head">([\s\
 const gallerySelection = galleryRoot.innerHTML.match(/<div class="gallery-selection">([\s\S]*?)<\/div>/)?.[1] || "";
 assert.match(galleryHead, /Task task-1/);
 assert.doesNotMatch(galleryHead, /data-action="copy-to-send"/);
+assert.match(gallerySelection, /type="checkbox"/);
+assert.match(gallerySelection, /data-image-id="image-1"/);
+assert.match(gallerySelection, /加入 ID/);
+assert.match(gallerySelection, /<details class="gallery-action-menu">/);
+assert.match(gallerySelection, /<summary[^>]*>Actions<\/summary>/);
+assert.match(gallerySelection, /data-action="copy-to-send"/);
+assert.match(gallerySelection, /data-action="copy-to-send-seed"/);
 assert.match(gallerySelection, /data-action="remix-inpaint"/);
 assert.match(gallerySelection, /data-action="remix-img2img"/);
 assert.match(gallerySelection, />Inpaint</);
 assert.match(gallerySelection, />Img2Img</);
-assert.doesNotMatch(gallerySelection, /type="checkbox"/);
 assert.doesNotMatch(gallerySelection, /remax/);
-assert.doesNotMatch(galleryRoot.innerHTML, /generationImageIds/);
 assert.doesNotMatch(galleryRoot.innerHTML, /複製到 API 1 Body/);
 
 const canvasImport = buildCanvasImportFromGalleryEntry(state.galleryItems[0], "img2img");

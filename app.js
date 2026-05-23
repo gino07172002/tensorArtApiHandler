@@ -925,7 +925,7 @@ function bindGalleryOptions(dom) {
   });
 }
 
-function renderGallery(dom) {
+function renderGalleryLegacy(dom) {
   dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
 
   if (!state.galleryItems.length) {
@@ -962,6 +962,65 @@ function renderGallery(dom) {
       </article>
     `;
   }).join("");
+
+  dom.root.querySelectorAll("button[data-action]").forEach((button) => {
+    button.addEventListener("click", () => handleGalleryAction(button.dataset.action, Number(button.dataset.index), dom));
+  });
+}
+
+function renderGallery(dom) {
+  dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
+
+  if (!state.galleryItems.length) {
+    dom.stats.textContent = "沒有 Query Results。";
+    dom.root.innerHTML = "";
+    return;
+  }
+
+  dom.stats.textContent = `共 ${state.galleryItems.length} 張圖片，可勾選 ID 或展開 Actions 做 Remix / Inpaint / Img2Img。`;
+  dom.root.innerHTML = state.galleryItems.map((entry, index) => {
+    const imageId = entry.generationImageId || "";
+    const checked = imageId && state.selectedImageIds.includes(imageId) ? " checked" : "";
+    return `
+      <article class="gallery-card">
+        <img src="${escapeHtml(entry.url)}" alt="Task ${escapeHtml(entry.taskId)}">
+        <div class="gallery-body">
+          <div class="gallery-head">
+            <h3 class="gallery-title">Task ${escapeHtml(entry.taskId)}</h3>
+            <span class="pill">${escapeHtml(entry.status || "UNKNOWN")}</span>
+          </div>
+          <div class="gallery-selection">
+            <label class="gallery-selection-label">
+              <input type="checkbox" data-image-id="${escapeHtml(imageId)}"${checked} ${imageId ? "" : "disabled"}>
+              <span>加入 ID</span>
+            </label>
+            <details class="gallery-action-menu">
+              <summary class="remix-button">Actions</summary>
+              <div class="gallery-action-list">
+                <button type="button" data-action="copy-to-send" data-index="${index}" title="複製生成參數到 API 1 (seed=-1)">Remix</button>
+                <button type="button" data-action="copy-to-send-seed" data-index="${index}" title="複製生成參數到 API 1 (保留 seed)">Remix+Seed</button>
+                <button type="button" data-action="remix-inpaint" data-index="${index}" title="帶圖到 Canvas 做 Inpaint">Inpaint</button>
+                <button type="button" data-action="remix-img2img" data-index="${index}" title="帶圖到 Canvas 做 Img2Img">Img2Img</button>
+                <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
+              </div>
+            </details>
+          </div>
+          <div class="gallery-meta">
+            <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
+            <span class="pill">${escapeHtml(entry.metadata.size || "-")}</span>
+          </div>
+          <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  dom.root.querySelectorAll("input[data-image-id]").forEach((input) => {
+    input.addEventListener("change", () => {
+      toggleSelectedImageId(input.dataset.imageId, input.checked);
+      dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
+    });
+  });
 
   dom.root.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleGalleryAction(button.dataset.action, Number(button.dataset.index), dom));
