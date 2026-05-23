@@ -566,13 +566,29 @@ function initCanvasPage() {
     dom.pick.addEventListener("click", () => runColorPicker(dom));
   }
 
+  const applyLayerMode = () => {
+    const toolbarEl = document.querySelector(".canvas-toolbar");
+    const inspectorEl = document.querySelector(".canvas-inspector");
+    if (toolbarEl) toolbarEl.dataset.activeLayer = editor.layer;
+    if (inspectorEl) inspectorEl.classList.toggle("is-mask-mode", editor.layer === "mask");
+
+    if (editor.layer === "mask") {
+      if (editor.tool === "move" || editor.tool === "eyedropper") {
+        editor.tool = "brush";
+        dom.toolButtons.forEach((item) => item.classList.toggle("is-active", item.dataset.canvasTool === "brush"));
+      }
+    }
+  };
+
   dom.layerButtons.forEach((button) => {
     button.addEventListener("click", () => {
       editor.layer = button.dataset.canvasLayer;
       dom.layerButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+      applyLayerMode();
       renderCanvasEditor(editor);
     });
   });
+  applyLayerMode();
 
   if (dom.layerList) {
     renderLayerPanel(editor, dom);
@@ -1524,15 +1540,18 @@ function clampCanvasDim(value) {
 
 function fitCanvasDisplay(editor) {
   const canvas = editor.canvas;
-  const frame = canvas.parentElement;
+  const host = canvas.parentElement;
+  const frame = host?.parentElement;
   if (!frame) return;
   const aw = canvas.width;
   const ah = canvas.height;
   if (!aw || !ah) return;
-  const fw = frame.clientWidth || aw;
-  const fh = frame.clientHeight || ah;
-  if (!fw || !fh) return;
-  const scale = Math.min(fw / aw, fh / ah, 1);
+  const style = getComputedStyle(frame);
+  const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+  const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+  const fw = Math.max(1, (frame.clientWidth || aw) - padX);
+  const fh = Math.max(1, (frame.clientHeight || ah) - padY);
+  const scale = Math.min(fw / aw, fh / ah);
   const displayW = Math.max(1, Math.floor(aw * scale));
   const displayH = Math.max(1, Math.floor(ah * scale));
   canvas.style.width = `${displayW}px`;

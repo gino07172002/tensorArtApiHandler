@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=canvas-remix-10">
+  <link rel="stylesheet" href="./styles.css?v=canvas-remix-11">
 </head>
 <body data-page="canvas">
   <div class="app-shell canvas-shell">
@@ -38,7 +38,7 @@
           <p class="eyebrow">Request</p>
           <h2>API Body</h2>
         </div>
-        <div class="layer-panel" aria-label="Paint layers">
+        <div class="layer-panel paint-only" aria-label="Paint layers">
           <div class="layer-panel-header">
             <span class="field-label" style="margin:0">Layers</span>
             <div class="layer-actions">
@@ -115,7 +115,7 @@
         </details>
       </aside>
 
-      <aside class="canvas-toolbar panel icon-toolbar">
+      <aside class="canvas-toolbar panel icon-toolbar" data-active-layer="paint">
         <label class="icon-field" title="Load local image">
           <span class="icon-label" aria-hidden="true">📁</span>
           <span class="sr-only">Local image</span>
@@ -128,7 +128,7 @@
         </div>
 
         <div class="icon-toggle icon-tools" aria-label="Tool">
-          <button type="button" class="icon-button is-active" data-canvas-tool="move" title="Move / transform" aria-label="Move">✥</button>
+          <button type="button" class="icon-button is-active paint-only" data-canvas-tool="move" title="Move / transform" aria-label="Move">✥</button>
           <div class="brush-tool-wrap">
             <button type="button" class="icon-button" data-canvas-tool="brush" title="Brush (click again to adjust)" aria-label="Brush">🖌</button>
             <div id="canvas-brush-popover" class="brush-popover" hidden>
@@ -142,22 +142,22 @@
                 <input id="canvas-brush-opacity" type="range" min="5" max="100" value="70">
                 <output id="canvas-brush-opacity-val">70</output>
               </label>
-              <label class="popover-row">
+              <label class="popover-row paint-only">
                 <span>Color</span>
                 <input id="canvas-color" type="color" value="#d9480f">
               </label>
             </div>
           </div>
           <button type="button" class="icon-button" data-canvas-tool="eraser" title="Erase" aria-label="Erase">🧽</button>
-          <button type="button" id="canvas-pick" class="icon-button" title="Pick color from screen" aria-label="Pick color">💧</button>
+          <button type="button" id="canvas-pick" class="icon-button paint-only" title="Pick color from screen" aria-label="Pick color">💧</button>
         </div>
 
         <div class="icon-toggle">
-          <button type="button" id="canvas-clear-paint" class="icon-button" title="Clear paint" aria-label="Clear paint">⌫</button>
-          <button type="button" id="canvas-clear-mask" class="icon-button" title="Clear mask" aria-label="Clear mask">⌧</button>
+          <button type="button" id="canvas-clear-paint" class="icon-button paint-only" title="Clear active layer" aria-label="Clear active layer">⌫</button>
+          <button type="button" id="canvas-clear-mask" class="icon-button mask-only" title="Reset mask" aria-label="Reset mask">↺</button>
         </div>
 
-        <div class="transform-mini" aria-label="Transform">
+        <div class="transform-mini paint-only" aria-label="Transform">
           <label title="X position"><span aria-hidden="true">X</span><input id="canvas-x" type="number" value="512"></label>
           <label title="Y position"><span aria-hidden="true">Y</span><input id="canvas-y" type="number" value="384"></label>
           <label title="Scale %"><span aria-hidden="true">⤢</span><input id="canvas-scale" type="number" min="5" max="400" value="100"></label>
@@ -174,13 +174,15 @@
           <p id="canvas-stats" class="canvas-status">Load an image or send one from Query Results.</p>
         </div>
         <div class="stage-frame">
-          <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
+          <div class="editor-canvas-host">
+            <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
+          </div>
         </div>
         <p class="canvas-hint">畫布尺寸 = API 的 width × height。畫布外的內容不會被送出。Move 工具下可拖曳圖片內部=平移、四角=縮放、頂端圓點=旋轉。</p>
       </section>
     </main>
   </div>
 
-  <script type="module" src="./app.js?v=canvas-remix-10"></script>
+  <script type="module" src="./app.js?v=canvas-remix-11"></script>
 </body>
 </html>
