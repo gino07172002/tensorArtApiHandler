@@ -692,33 +692,7 @@ function initMetadataPage() {
     if (!state.importedMetadata || state.importedMetadata.error) return;
 
     try {
-      const payload = JSON.parse(state.send.bodyText || "{}");
-      const params = payload.params || {};
-      const meta = state.importedMetadata;
-      params.prompt = meta.prompt ?? params.prompt ?? "";
-      params.negativePrompt = meta.negativePrompt ?? params.negativePrompt ?? "";
-      params.steps = castNumber(meta.steps, params.steps);
-      params.cfgScale = castNumber(meta.cfgScale, params.cfgScale);
-      params.guidance = castNumber(meta.guidance, params.guidance);
-      params.clipSkip = castNumber(meta.clipSkip, params.clipSkip);
-      params.seed = String(meta.seed ?? params.seed ?? "-1");
-      params.sdVae = meta.vae ?? params.sdVae ?? "Automatic";
-      params.ksamplerName = meta.kSampler ?? params.ksamplerName ?? "";
-      params.schedule = meta.schedule ?? params.schedule ?? "";
-      params.width = castNumber(meta.width, params.width);
-      params.height = castNumber(meta.height, params.height);
-
-      if (meta.modelId && meta.modelFileId) {
-        params.baseModel = {
-          ...(params.baseModel || {}),
-          modelId: String(meta.modelId),
-          modelFileId: String(meta.modelFileId),
-        };
-      }
-
-      payload.params = params;
-      state.send.bodyText = JSON.stringify(payload, null, 2);
-      saveState();
+      applyMetadataToSendBody(state.importedMetadata, { keepSeed: true });
       output.textContent = `${JSON.stringify(state.importedMetadata, null, 2)}\n\nApplied metadata to Send Request Body.`;
     } catch (error) {
       output.textContent = `Apply failed: ${error.message}`;
@@ -1010,6 +984,11 @@ function renderGallery(dom) {
           <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
           <div class="gallery-actions">
             <button type="button" data-action="open-original" data-index="${index}">????</button>
+            <button type="button" data-action="apply-to-send" data-index="${index}">套用到 Send Body</button>
+            <label style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.875rem;">
+              <input type="checkbox" class="keep-seed" data-index="${index}" checked>
+              沿用 seed
+            </label>
           </div>
         </div>
       </article>
@@ -1102,6 +1081,19 @@ function extractBlobFromImageElement(imgElement, targetMimeType) {
 async function handleGalleryAction(action, index, dom) {
   const entry = state.galleryItems[index];
   if (!entry) return;
+
+  if (action === "apply-to-send") {
+    const keepSeedInput = dom.root.querySelector(`input.keep-seed[data-index="${index}"]`);
+    const keepSeed = keepSeedInput ? keepSeedInput.checked : true;
+    try {
+      applyMetadataToSendBody(entry.metadata, { keepSeed });
+      const seedLabel = keepSeed ? `seed=${entry.metadata.seed || "-"}` : "seed=-1 (random)";
+      dom.stats.textContent = `已套用 Task ${entry.taskId} 的設定到 Send Body (${seedLabel})。`;
+    } catch (error) {
+      dom.stats.textContent = `套用失敗: ${error.message}`;
+    }
+    return;
+  }
 
   const signedExpiry = getSignedUrlExpiry(entry.url);
   if (signedExpiry && new Date() > signedExpiry) {
@@ -1352,6 +1344,38 @@ function buildSourcePreview(request) {
 
   const preview = `${method} ${url}`;
   return preview.length > 72 ? `${preview.slice(0, 69)}...` : preview;
+}
+
+function applyMetadataToSendBody(meta, { keepSeed = true } = {}) {
+  const payload = JSON.parse(state.send.bodyText || "{}");
+  const params = payload.params || {};
+  params.prompt = meta.prompt ?? params.prompt ?? "";
+  params.negativePrompt = meta.negativePrompt ?? params.negativePrompt ?? "";
+  params.steps = castNumber(meta.steps, params.steps);
+  params.cfgScale = castNumber(meta.cfgScale, params.cfgScale);
+  params.guidance = castNumber(meta.guidance, params.guidance);
+  params.clipSkip = castNumber(meta.clipSkip, params.clipSkip);
+  params.seed = keepSeed ? String(meta.seed ?? params.seed ?? "-1") : "-1";
+  params.sdVae = meta.vae ?? params.sdVae ?? "Automatic";
+  params.ksamplerName = meta.kSampler ?? params.ksamplerName ?? "";
+  params.schedule = meta.schedule ?? params.schedule ?? "";
+  params.width = castNumber(meta.width, params.width);
+  params.height = castNumber(meta.height, params.height);
+
+  if (meta.modelId && meta.modelFileId) {
+    params.baseModel = {
+      ...(params.baseModel || {}),
+      modelId: String(meta.modelId),
+      modelFileId: String(meta.modelFileId),
+    };
+  }
+
+  payload.params = params;
+  state.send.bodyText = JSON.stringify(payload, null, 2);
+  saveState();
+
+  const sendBody = document.querySelector("#send-body");
+  if (sendBody) sendBody.value = state.send.bodyText;
 }
 
 function flattenTasks(tasks) {
