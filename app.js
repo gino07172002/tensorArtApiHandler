@@ -932,7 +932,10 @@ function renderGallery(dom) {
     const checked = imageId && state.selectedImageIds.includes(imageId) ? " checked" : "";
     return `
       <article class="gallery-card">
-        <img src="${escapeHtml(entry.url)}" alt="Task ${escapeHtml(entry.taskId)}">
+        <div class="gallery-img-wrap">
+          <img src="${escapeHtml(entry.url)}" alt="Task ${escapeHtml(entry.taskId)}">
+          <button type="button" class="gallery-open-button" data-action="open-original" data-index="${index}" title="Open image">Open</button>
+        </div>
         <div class="gallery-body">
           <div class="gallery-head">
             <h3 class="gallery-title">Task <span class="gallery-taskid">${escapeHtml(entry.taskId)}</span></h3>
@@ -952,7 +955,6 @@ function renderGallery(dom) {
                 <button type="button" data-action="remix-img2img" data-index="${index}" title="帶圖到 Canvas 做 Img2Img">Img2Img</button>
               </div>
             </div>
-            <button type="button" class="gallery-open-button" data-action="open-original" data-index="${index}" title="Open image">Open</button>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
@@ -1181,7 +1183,7 @@ function parsePowerShellRequest(text) {
 
   const url = capturePowerShellParameter(text, "Uri");
   const method = capturePowerShellParameter(text, "Method");
-  const headersBlock = captureOptional(text, /-Headers\s+@\{([\s\S]*?)\}/i);
+  const headersBlock = extractPowerShellHeadersBlock(text);
   const bodyLiteral = extractPowerShellBodyLiteral(text);
 
   return {
@@ -1193,15 +1195,39 @@ function parsePowerShellRequest(text) {
   };
 }
 
+function extractPowerShellHeadersBlock(text) {
+  const start = text.search(/-Headers\s+@\{/i);
+  if (start === -1) return "";
+  const openBrace = text.indexOf("{", start);
+  if (openBrace === -1) return "";
+  let depth = 1;
+  let i = openBrace + 1;
+  while (i < text.length && depth > 0) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}") depth--;
+    i++;
+  }
+  return depth === 0 ? text.slice(openBrace + 1, i - 1) : "";
+}
+
 function parseHeaderBlock(block) {
   const headers = {};
-  const pattern = /"([^"]+)"\s*=\s*"([\s\S]*?)"/g;
-  let match;
-
-  while ((match = pattern.exec(block)) !== null) {
-    headers[match[1]] = decodePowerShellString(match[2]);
+  let i = 0;
+  while (i < block.length) {
+    const keyStart = block.indexOf('"', i);
+    if (keyStart === -1) break;
+    const keyEnd = block.indexOf('"', keyStart + 1);
+    if (keyEnd === -1) break;
+    const key = block.slice(keyStart + 1, keyEnd);
+    const eqPos = block.indexOf("=", keyEnd + 1);
+    if (eqPos === -1) break;
+    const afterEq = block.slice(eqPos + 1).trimStart();
+    if (!afterEq.startsWith('"')) { i = eqPos + 1; continue; }
+    const valLiteral = readDoubleQuotedPowerShellString(afterEq, 0);
+    if (!valLiteral) { i = eqPos + 1; continue; }
+    headers[key] = decodePowerShellString(valLiteral.value);
+    i = eqPos + 1 + afterEq.indexOf('"') + 1 + valLiteral.value.length + 1;
   }
-
   return headers;
 }
 
