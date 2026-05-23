@@ -30,6 +30,7 @@ globalThis.__testExports = {
   copyGenerationToSendBody,
   getState: () => state,
   parsePowerShellRequest,
+  renderGallery,
   sanitizeHeaders,
 };
 `, context);
@@ -39,6 +40,7 @@ const {
   copyGenerationToSendBody,
   getState,
   parsePowerShellRequest,
+  renderGallery,
   sanitizeHeaders,
 } = context.__testExports;
 
@@ -136,5 +138,34 @@ state.queryResultCopySeed = true;
 copyGenerationToSendBody({ metadata }, dom);
 assert.equal(JSON.parse(state.send.bodyText).params.seed, "987654321");
 assert.match(dom.stats.textContent, /包含 seed/);
+
+state.galleryItems = [{
+  taskId: "task-1",
+  status: "FINISH",
+  url: "https://example.test/image.png",
+  generationImageId: "image-1",
+  metadata,
+}];
+state.selectedImageIds = [];
+
+const galleryRoot = {
+  innerHTML: "",
+  querySelectorAll: () => [],
+};
+renderGallery({
+  stats: { textContent: "" },
+  root: galleryRoot,
+  selectedCount: [{ textContent: "" }],
+});
+
+const galleryHead = galleryRoot.innerHTML.match(/<div class="gallery-head">([\s\S]*?)<\/div>/)?.[1] || "";
+const gallerySelection = galleryRoot.innerHTML.match(/<div class="gallery-selection">([\s\S]*?)<\/div>/)?.[1] || "";
+assert.match(galleryHead, /Task task-1/);
+assert.doesNotMatch(galleryHead, /data-action="copy-to-send"/);
+assert.match(gallerySelection, /data-action="copy-to-send"/);
+assert.match(gallerySelection, />remax</);
+assert.match(gallerySelection, /選入 Post/);
+assert.doesNotMatch(galleryRoot.innerHTML, /generationImageIds/);
+assert.doesNotMatch(galleryRoot.innerHTML, /複製到 API 1 Body/);
 
 console.log("app helper tests passed");

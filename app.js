@@ -704,8 +704,11 @@ function renderGallery(dom) {
             <span class="pill">${escapeHtml(entry.status || "UNKNOWN")}</span>
           </div>
           <div class="gallery-selection">
-            <input type="checkbox" id="pick-${index}" data-image-id="${escapeHtml(entry.generationImageId)}" ${checked}>
-            <label for="pick-${index}">加入 generationImageIds</label>
+            <label class="gallery-selection-label" for="pick-${index}">
+              <input type="checkbox" id="pick-${index}" data-image-id="${escapeHtml(entry.generationImageId)}" ${checked}>
+              選入 Post
+            </label>
+            <button type="button" class="remax-button" data-action="copy-to-send" data-index="${index}">remax</button>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
@@ -713,7 +716,6 @@ function renderGallery(dom) {
           </div>
           <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
           <div class="gallery-actions">
-            <button type="button" data-action="copy-to-send" data-index="${index}">複製到 API 1 Body</button>
             <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
           </div>
         </div>

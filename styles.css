@@ -352,6 +352,29 @@ button:hover {
   font-size: 1rem;
 }
 
+.remax-button {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #fff7f1;
+  background: var(--accent);
+}
+
+.gallery-selection-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.gallery-selection-label input {
+  flex: 0 0 auto;
+}
+
 .pill {
   padding: 4px 10px;
   border-radius: 999px;
