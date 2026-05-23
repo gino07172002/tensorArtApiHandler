@@ -207,6 +207,9 @@ assert.match(gallerySelection, /data-action="remix-inpaint"/);
 assert.match(gallerySelection, /data-action="remix-img2img"/);
 assert.match(gallerySelection, />Inpaint</);
 assert.match(gallerySelection, />Img2Img</);
+assert.match(gallerySelection, /class="gallery-open-button"/);
+assert.match(gallerySelection, /data-action="open-original"/);
+assert.match(gallerySelection, />Open</);
 assert.doesNotMatch(gallerySelection, /remax/);
 assert.doesNotMatch(galleryRoot.innerHTML, /複製到 API 1 Body/);
 

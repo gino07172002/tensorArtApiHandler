@@ -1,4 +1,4 @@
-const STORAGE_KEY = "tensor-api-qa-console-v2";
+﻿const STORAGE_KEY = "tensor-api-qa-console-v2";
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const JPEG_SOI = [0xff, 0xd8];
 const FORBIDDEN_HEADERS = new Set([
@@ -952,6 +952,7 @@ function renderGallery(dom) {
               <input type="checkbox" data-image-id="${escapeHtml(imageId)}"${checked} ${imageId ? "" : "disabled"}>
               <span>加入 ID</span>
             </label>
+            <button type="button" class="gallery-open-button" data-action="open-original" data-index="${index}" title="Open image">Open</button>
             <details class="gallery-action-menu">
               <summary class="remix-button">Actions</summary>
               <div class="gallery-action-list">
@@ -959,7 +960,6 @@ function renderGallery(dom) {
                 <button type="button" data-action="copy-to-send-seed" data-index="${index}" title="複製生成參數到 API 1 (保留 seed)">Remix+Seed</button>
                 <button type="button" data-action="remix-inpaint" data-index="${index}" title="帶圖到 Canvas 做 Inpaint">Inpaint</button>
                 <button type="button" data-action="remix-img2img" data-index="${index}" title="帶圖到 Canvas 做 Img2Img">Img2Img</button>
-                <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
               </div>
             </details>
           </div>

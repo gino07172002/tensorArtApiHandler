@@ -394,6 +394,20 @@ button:hover {
   flex: 0 0 auto;
 }
 
+.gallery-open-button {
+  position: absolute;
+  top: 14px;
+  right: 84px;
+  min-height: 24px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--accent-dark);
+  background: rgba(135, 49, 23, 0.1);
+  border: 1px solid rgba(135, 49, 23, 0.12);
+}
+
 .gallery-action-menu summary {
   list-style: none;
   cursor: pointer;
