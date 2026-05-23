@@ -472,6 +472,9 @@ function initCanvasPage() {
     stats: document.querySelector("#canvas-stats"),
     build: document.querySelector("#canvas-build"),
     applyToSend: document.querySelector("#canvas-apply-send"),
+    send: document.querySelector("#canvas-send"),
+    response: document.querySelector("#canvas-response"),
+    responseFold: document.querySelector("#canvas-response-fold"),
     clearMask: document.querySelector("#canvas-clear-mask"),
     clearPaint: document.querySelector("#canvas-clear-paint"),
   };
@@ -498,6 +501,7 @@ function initCanvasPage() {
     saveState();
     dom.stats.textContent = "已套用到 Dashboard 的 API 1 Body。";
   });
+  dom.send.addEventListener("click", () => sendCanvasRequest(editor, dom));
   dom.clearMask.addEventListener("click", () => {
     editor.maskCtx.clearRect(0, 0, editor.maskCanvas.width, editor.maskCanvas.height);
     renderCanvasEditor(editor);
@@ -513,6 +517,7 @@ function initCanvasPage() {
     button.addEventListener("click", () => {
       editor.tool = button.dataset.canvasTool;
       dom.toolButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+      renderCanvasEditor(editor);
     });
   });
 
@@ -551,8 +556,18 @@ function initCanvasPage() {
 
   dom.canvas.addEventListener("pointerdown", (event) => handleCanvasPointerDown(event, editor, dom));
   dom.canvas.addEventListener("pointermove", (event) => handleCanvasPointerMove(event, editor, dom));
-  dom.canvas.addEventListener("pointerup", () => { editor.pointer = null; });
-  dom.canvas.addEventListener("pointerleave", () => { editor.pointer = null; });
+  const endPointer = () => {
+    if (editor.pointer && editor.pointer.mode !== "stroke") {
+      updateCanvasBodyPreview(editor, dom);
+    }
+    editor.pointer = null;
+    dom.canvas.style.cursor = "";
+  };
+  dom.canvas.addEventListener("pointerup", endPointer);
+  dom.canvas.addEventListener("pointercancel", endPointer);
+  dom.canvas.addEventListener("pointerleave", () => {
+    if (!editor.pointer) dom.canvas.style.cursor = "";
+  });
 }
 
 function bindRequestSection(prefix) {
@@ -1378,6 +1393,44 @@ function getCanvasInheritedHeaders() {
   return sanitizeHeaders(inherited);
 }
 
+async function sendCanvasRequest(editor, dom) {
+  const draft = buildCanvasEditorDraftFromDom(editor, dom);
+  const headers = {
+    ...getCanvasInheritedHeaders(),
+    "content-type": draft.contentType,
+  };
+
+  if (!Object.keys(getCanvasInheritedHeaders()).length) {
+    dom.stats.textContent = "找不到可用的 headers。請先在 Dashboard 貼一次 PowerShell 來繼承授權 cookie。";
+    dom.responseFold.open = true;
+    dom.response.textContent = "尚未送出：缺少 headers (authorization / cookie 等)。";
+    return;
+  }
+
+  dom.send.disabled = true;
+  dom.responseFold.open = true;
+  dom.response.textContent = "送出中...";
+  dom.stats.textContent = "送出中...";
+
+  try {
+    const response = await fetch(draft.url, {
+      method: draft.method,
+      headers,
+      mode: "cors",
+      credentials: "include",
+      body: JSON.stringify(draft.body),
+    });
+    const text = await response.text();
+    dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}`;
+    dom.stats.textContent = `已送出 (HTTP ${response.status})`;
+  } catch (error) {
+    dom.response.textContent = `Request 失敗: ${error.message}`;
+    dom.stats.textContent = `送出失敗: ${error.message}`;
+  } finally {
+    dom.send.disabled = false;
+  }
+}
+
 function createCanvasEditor(canvas, dom) {
   const paintCanvas = document.createElement("canvas");
   const maskCanvas = document.createElement("canvas");
@@ -1588,11 +1641,32 @@ function handleCanvasPointerDown(event, editor, dom) {
     return;
   }
 
+  if (editor.tool === "move" && editor.baseImage) {
+    const handle = hitTestCanvasHandle(point, editor);
+    if (handle) {
+      editor.pointer = {
+        mode: handle,
+        startX: point.x,
+        startY: point.y,
+        transformX: editor.transform.x,
+        transformY: editor.transform.y,
+        scale: editor.transform.scale,
+        rotation: editor.transform.rotation,
+      };
+      return;
+    }
+  }
+
   editor.pointer = {
+    mode: editor.tool === "move" ? "pan" : "stroke",
     x: point.x,
     y: point.y,
+    startX: point.x,
+    startY: point.y,
     transformX: editor.transform.x,
     transformY: editor.transform.y,
+    scale: editor.transform.scale,
+    rotation: editor.transform.rotation,
   };
 
   if (editor.tool !== "move") {
@@ -1603,22 +1677,120 @@ function handleCanvasPointerDown(event, editor, dom) {
 }
 
 function handleCanvasPointerMove(event, editor, dom) {
-  if (!editor.pointer) return;
   const point = canvasEventPoint(event, editor.canvas);
 
-  if (editor.tool === "move") {
-    editor.transform.x = Math.round(editor.pointer.transformX + point.x - editor.pointer.x);
-    editor.transform.y = Math.round(editor.pointer.transformY + point.y - editor.pointer.y);
-    dom.x.value = String(editor.transform.x);
-    dom.y.value = String(editor.transform.y);
+  if (!editor.pointer) {
+    if (editor.tool === "move" && editor.baseImage) {
+      const handle = hitTestCanvasHandle(point, editor);
+      editor.canvas.style.cursor = canvasCursorForHandle(handle);
+    } else {
+      editor.canvas.style.cursor = "";
+    }
+    return;
+  }
+
+  const p = editor.pointer;
+
+  if (p.mode === "pan") {
+    editor.transform.x = Math.round(p.transformX + point.x - p.startX);
+    editor.transform.y = Math.round(p.transformY + point.y - p.startY);
+    syncCanvasTransformInputs(editor, dom);
     renderCanvasEditor(editor);
     return;
   }
 
-  drawCanvasStroke(editor.pointer, point, editor, dom);
-  editor.pointer = { ...editor.pointer, x: point.x, y: point.y };
-  renderCanvasEditor(editor);
-  updateCanvasBodyPreview(editor, dom);
+  if (p.mode === "rotate") {
+    const a0 = Math.atan2(p.startY - p.transformY, p.startX - p.transformX);
+    const a1 = Math.atan2(point.y - p.transformY, point.x - p.transformX);
+    let next = p.rotation + ((a1 - a0) * 180) / Math.PI;
+    next = ((next + 180) % 360 + 360) % 360 - 180;
+    editor.transform.rotation = Math.round(next);
+    syncCanvasTransformInputs(editor, dom);
+    renderCanvasEditor(editor);
+    return;
+  }
+
+  if (p.mode && p.mode.startsWith("scale-")) {
+    const startDist = Math.hypot(p.startX - p.transformX, p.startY - p.transformY);
+    const curDist = Math.hypot(point.x - p.transformX, point.y - p.transformY);
+    if (startDist > 0) {
+      const next = Math.max(0.05, Math.min(4, (p.scale * curDist) / startDist));
+      editor.transform.scale = next;
+      syncCanvasTransformInputs(editor, dom);
+      renderCanvasEditor(editor);
+    }
+    return;
+  }
+
+  if (p.mode === "stroke") {
+    drawCanvasStroke({ x: p.x, y: p.y }, point, editor, dom);
+    editor.pointer = { ...p, x: point.x, y: point.y };
+    renderCanvasEditor(editor);
+    updateCanvasBodyPreview(editor, dom);
+  }
+}
+
+function syncCanvasTransformInputs(editor, dom) {
+  dom.x.value = String(editor.transform.x);
+  dom.y.value = String(editor.transform.y);
+  dom.scale.value = String(Math.round(editor.transform.scale * 100));
+  dom.rotation.value = String(editor.transform.rotation);
+}
+
+function getCanvasImageCorners(editor) {
+  const img = editor.baseImage;
+  if (!img) return null;
+  const { x, y, scale, rotation } = editor.transform;
+  const hw = (img.width * scale) / 2;
+  const hh = (img.height * scale) / 2;
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const local = [
+    { lx: -hw, ly: -hh },
+    { lx: hw, ly: -hh },
+    { lx: hw, ly: hh },
+    { lx: -hw, ly: hh },
+  ];
+  const corners = local.map(({ lx, ly }) => ({
+    x: x + lx * cos - ly * sin,
+    y: y + lx * sin + ly * cos,
+  }));
+  const rotateHandle = {
+    x: x + 0 * cos - (-hh - 36) * sin,
+    y: y + 0 * sin + (-hh - 36) * cos,
+  };
+  return { corners, rotateHandle, hw, hh, cos, sin };
+}
+
+function hitTestCanvasHandle(point, editor) {
+  const info = getCanvasImageCorners(editor);
+  if (!info) return null;
+  const tolerance = 14;
+  if (Math.hypot(point.x - info.rotateHandle.x, point.y - info.rotateHandle.y) <= tolerance) {
+    return "rotate";
+  }
+  for (let i = 0; i < info.corners.length; i += 1) {
+    const c = info.corners[i];
+    if (Math.hypot(point.x - c.x, point.y - c.y) <= tolerance) {
+      return `scale-${i}`;
+    }
+  }
+  const { x, y } = editor.transform;
+  const dx = point.x - x;
+  const dy = point.y - y;
+  const lx = dx * info.cos + dy * info.sin;
+  const ly = -dx * info.sin + dy * info.cos;
+  if (Math.abs(lx) <= info.hw && Math.abs(ly) <= info.hh) {
+    return null;
+  }
+  return null;
+}
+
+function canvasCursorForHandle(handle) {
+  if (!handle) return "";
+  if (handle === "rotate") return "grab";
+  return "nwse-resize";
 }
 
 function drawCanvasStroke(from, to, editor, dom) {
@@ -1680,6 +1852,51 @@ function renderCanvasEditor(editor) {
   } else {
     ctx.drawImage(editor.paintCanvas, 0, 0);
   }
+
+  if (editor.tool === "move" && editor.baseImage) {
+    drawCanvasTransformHandles(ctx, editor);
+  }
+}
+
+function drawCanvasTransformHandles(ctx, editor) {
+  const info = getCanvasImageCorners(editor);
+  if (!info) return;
+  const { corners, rotateHandle } = info;
+
+  ctx.save();
+  ctx.strokeStyle = "#c44f2b";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < corners.length; i += 1) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const topMid = {
+    x: (corners[0].x + corners[1].x) / 2,
+    y: (corners[0].y + corners[1].y) / 2,
+  };
+  ctx.beginPath();
+  ctx.moveTo(topMid.x, topMid.y);
+  ctx.lineTo(rotateHandle.x, rotateHandle.y);
+  ctx.stroke();
+
+  corners.forEach((c) => {
+    ctx.fillStyle = "#fff7f1";
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = "#fff7f1";
+  ctx.beginPath();
+  ctx.arc(rotateHandle.x, rotateHandle.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawCanvasGrid(ctx, width, height) {
