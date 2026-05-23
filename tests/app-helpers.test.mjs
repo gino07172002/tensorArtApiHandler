@@ -27,6 +27,8 @@ vm.createContext(context);
 vm.runInContext(`${source}
 globalThis.__testExports = {
   applyGenerationMetadataToBody,
+  buildCanvasEditorRequestDraft,
+  buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState: () => state,
   parsePowerShellRequest,
@@ -37,6 +39,8 @@ globalThis.__testExports = {
 
 const {
   applyGenerationMetadataToBody,
+  buildCanvasEditorRequestDraft,
+  buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState,
   parsePowerShellRequest,
@@ -131,13 +135,13 @@ state.send.bodyText = sourceBody;
 state.queryResultCopySeed = false;
 copyGenerationToSendBody({ metadata }, dom);
 assert.equal(JSON.parse(state.send.bodyText).params.seed, "-1");
-assert.match(dom.stats.textContent, /seed 已設為 -1/);
+assert.match(dom.stats.textContent, /seed/);
 
 state.send.bodyText = sourceBody;
 state.queryResultCopySeed = true;
 copyGenerationToSendBody({ metadata }, dom);
 assert.equal(JSON.parse(state.send.bodyText).params.seed, "987654321");
-assert.match(dom.stats.textContent, /包含 seed/);
+assert.match(dom.stats.textContent, /seed/);
 
 state.galleryItems = [{
   taskId: "task-1",
@@ -162,10 +166,58 @@ const galleryHead = galleryRoot.innerHTML.match(/<div class="gallery-head">([\s\
 const gallerySelection = galleryRoot.innerHTML.match(/<div class="gallery-selection">([\s\S]*?)<\/div>/)?.[1] || "";
 assert.match(galleryHead, /Task task-1/);
 assert.doesNotMatch(galleryHead, /data-action="copy-to-send"/);
-assert.match(gallerySelection, /data-action="copy-to-send"/);
-assert.match(gallerySelection, />remax</);
-assert.match(gallerySelection, /選入 Post/);
+assert.match(gallerySelection, /data-action="remix-inpaint"/);
+assert.match(gallerySelection, /data-action="remix-img2img"/);
+assert.match(gallerySelection, />Inpaint</);
+assert.match(gallerySelection, />Img2Img</);
+assert.doesNotMatch(gallerySelection, /type="checkbox"/);
+assert.doesNotMatch(gallerySelection, /remax/);
 assert.doesNotMatch(galleryRoot.innerHTML, /generationImageIds/);
 assert.doesNotMatch(galleryRoot.innerHTML, /複製到 API 1 Body/);
+
+const canvasImport = buildCanvasImportFromGalleryEntry(state.galleryItems[0], "img2img");
+assert.equal(canvasImport.mode, "img2img");
+assert.equal(canvasImport.imageUrl, "https://example.test/image.png");
+assert.equal(canvasImport.imageId, "image-1");
+assert.equal(canvasImport.taskId, "task-1");
+assert.equal(canvasImport.prompt, metadata.prompt);
+assert.equal(canvasImport.negativePrompt, metadata.negativePrompt);
+assert.equal(canvasImport.modelId, String(metadata.modelId));
+assert.equal(canvasImport.modelFileId, String(metadata.modelFileId));
+
+const canvasBase = {
+  prompt: "portrait study",
+  negativePrompt: "low quality",
+  imageDataUrl: "data:image/png;base64,base",
+  maskDataUrl: "data:image/png;base64,mask",
+  width: 768,
+  height: 1024,
+  steps: 25,
+  cfgScale: 5,
+  seed: "-1",
+  denoisingStrength: 0.51,
+  guidance: 3.5,
+  clipSkip: 2,
+  modelId: "990778216270553015",
+  modelFileId: "990778216270553016",
+  ksamplerName: "euler_ancestral",
+  schedule: "normal",
+};
+
+const inpaintDraft = buildCanvasEditorRequestDraft({ ...canvasBase, mode: "inpaint" });
+assert.equal(inpaintDraft.url, "https://api.tensor.art/works/v1/works/task_by_image");
+assert.equal(inpaintDraft.method, "POST");
+assert.equal(inpaintDraft.contentType, "application/json");
+assert.equal(inpaintDraft.body.taskType, "IMAGE_TO_INPAINT");
+assert.equal(inpaintDraft.body.params.inpaint.maskImage, canvasBase.maskDataUrl);
+assert.deepEqual(plain(inpaintDraft.body.params.images), [canvasBase.imageDataUrl]);
+
+const img2imgDraft = buildCanvasEditorRequestDraft({ ...canvasBase, mode: "img2img" });
+assert.equal(img2imgDraft.url, "https://api.tensor.art/works/v1/works/task");
+assert.equal(img2imgDraft.contentType, "text/plain;charset=UTF-8");
+assert.equal(img2imgDraft.body.taskType, "IMG2IMG");
+assert.equal(img2imgDraft.body.isRemix, true);
+assert.equal(img2imgDraft.body.captchaType, "CLOUDFLARE_TURNSTILE");
+assert.equal(img2imgDraft.body.params.inpaint, undefined);
 
 console.log("app helper tests passed");

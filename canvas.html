@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tensor API QA Console | Canvas Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-page="canvas">
+  <div class="app-shell canvas-shell">
+    <header class="hero canvas-hero">
+      <div>
+        <p class="eyebrow">Image Workspace</p>
+        <h1>Canvas Editor</h1>
+        <p class="hero-copy">Load a base image, paint masks, edit transforms, and build Inpaint / Img2Img API bodies.</p>
+      </div>
+      <div class="hero-actions">
+        <button type="button" id="export-storage" class="ghost-button">Export</button>
+        <button type="button" id="import-storage" class="ghost-button">Import</button>
+        <button type="button" id="clear-storage" class="ghost-button">Clear localStorage</button>
+        <input id="import-storage-file" type="file" accept="application/json" hidden>
+      </div>
+    </header>
+
+    <nav class="page-nav">
+      <a class="page-link" href="./index.html">Dashboard</a>
+      <a class="page-link" href="./gallery.html">Query / Gallery / Post</a>
+      <a class="page-link" href="./metadata.html">Metadata</a>
+      <a class="page-link is-active" href="./canvas.html">Canvas Editor</a>
+    </nav>
+
+    <main class="canvas-workbench">
+      <aside class="canvas-toolbar panel">
+        <div>
+          <p class="eyebrow">Tools</p>
+          <h2>Tools</h2>
+        </div>
+        <label class="field">
+          <span>Local image</span>
+          <input id="canvas-file" type="file" accept="image/*">
+        </label>
+        <div class="tool-grid" aria-label="Canvas tools">
+          <button type="button" class="tool-button is-active" data-canvas-tool="move">Move</button>
+          <button type="button" class="tool-button" data-canvas-tool="brush">Brush</button>
+          <button type="button" class="tool-button" data-canvas-tool="eraser">Erase</button>
+          <button type="button" class="tool-button" data-canvas-tool="mask">Mask</button>
+          <button type="button" class="tool-button" data-canvas-tool="eyedropper">Pick</button>
+        </div>
+        <label class="field">
+          <span>Brush size</span>
+          <input id="canvas-brush-size" type="range" min="2" max="120" value="28">
+        </label>
+        <label class="field">
+          <span>Opacity</span>
+          <input id="canvas-brush-opacity" type="range" min="5" max="100" value="70">
+        </label>
+        <label class="field">
+          <span>Brush color</span>
+          <input id="canvas-color" type="color" value="#d9480f">
+        </label>
+        <div class="button-row compact-row">
+          <button type="button" id="canvas-clear-mask" class="ghost-button">Clear Mask</button>
+          <button type="button" id="canvas-clear-paint" class="ghost-button">Clear Paint</button>
+        </div>
+      </aside>
+
+      <section class="canvas-stage-panel panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Stage</p>
+            <h2>Stage</h2>
+          </div>
+          <p id="canvas-stats" class="canvas-status">Load an image or send one from Query Results.</p>
+        </div>
+        <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
+        <div class="transform-grid">
+          <label class="field">
+            <span>X</span>
+            <input id="canvas-x" type="number" value="512">
+          </label>
+          <label class="field">
+            <span>Y</span>
+            <input id="canvas-y" type="number" value="384">
+          </label>
+          <label class="field">
+            <span>Scale %</span>
+            <input id="canvas-scale" type="number" min="5" max="400" value="100">
+          </label>
+          <label class="field">
+            <span>Rotate</span>
+            <input id="canvas-rotation" type="number" min="-180" max="180" value="0">
+          </label>
+        </div>
+      </section>
+
+      <aside class="canvas-inspector panel">
+        <div>
+          <p class="eyebrow">Request</p>
+          <h2>API Body</h2>
+        </div>
+        <label class="field">
+          <span>Mode</span>
+          <select id="canvas-mode">
+            <option value="inpaint">Inpaint / task_by_image</option>
+            <option value="img2img">Img2Img / task</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Prompt</span>
+          <textarea id="canvas-prompt" rows="4"></textarea>
+        </label>
+        <label class="field">
+          <span>Negative Prompt</span>
+          <textarea id="canvas-negative" rows="3">bad quality,worst quality,worst detail</textarea>
+        </label>
+        <div class="inline-grid">
+          <label class="field">
+            <span>Width</span>
+            <input id="canvas-width" type="number" value="1024">
+          </label>
+          <label class="field">
+            <span>Height</span>
+            <input id="canvas-height" type="number" value="768">
+          </label>
+          <label class="field">
+            <span>Steps</span>
+            <input id="canvas-steps" type="number" value="25">
+          </label>
+          <label class="field">
+            <span>CFG</span>
+            <input id="canvas-cfg" type="number" step="0.5" value="5">
+          </label>
+          <label class="field">
+            <span>Seed</span>
+            <input id="canvas-seed" type="text" value="-1">
+          </label>
+          <label class="field">
+            <span>Denoise</span>
+            <input id="canvas-denoise" type="number" step="0.01" min="0" max="1" value="0.51">
+          </label>
+        </div>
+        <label class="field">
+          <span>Model ID</span>
+          <input id="canvas-model-id" type="text" placeholder="modelId">
+        </label>
+        <label class="field">
+          <span>Model File ID</span>
+          <input id="canvas-model-file-id" type="text" placeholder="modelFileId">
+        </label>
+        <div class="button-row">
+          <button type="button" id="canvas-build" class="ghost-button">Update Body</button>
+          <button type="button" id="canvas-apply-send" class="primary-button">Apply to API 1</button>
+        </div>
+        <label class="field">
+          <span>Body Preview</span>
+          <textarea id="canvas-body" rows="14" spellcheck="false"></textarea>
+        </label>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

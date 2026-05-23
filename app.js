@@ -43,6 +43,10 @@ if (page === "metadata") {
   initMetadataPage();
 }
 
+if (page === "canvas") {
+  initCanvasPage();
+}
+
 function blankRequestState() {
   return {
     powershell: "",
@@ -64,6 +68,7 @@ function loadState() {
     selectedImageIds: [],
     galleryItems: [],
     queryResultCopySeed: false,
+    canvasImport: null,
     importedMetadata: null,
     savedSettings: { send: [], query: [], post: [] },
   };
@@ -80,6 +85,7 @@ function loadState() {
       selectedImageIds: Array.isArray(parsed.selectedImageIds) ? parsed.selectedImageIds : [],
       galleryItems: Array.isArray(parsed.galleryItems) ? parsed.galleryItems : [],
       queryResultCopySeed: Boolean(parsed.queryResultCopySeed),
+      canvasImport: parsed.canvasImport ?? null,
       importedMetadata: parsed.importedMetadata ?? null,
       savedSettings: parsed.savedSettings || { send: [], query: [], post: [] },
     };
@@ -113,6 +119,7 @@ function buildSnapshotData(source) {
     selectedImageIds: Array.isArray(source.selectedImageIds) ? [...source.selectedImageIds] : [],
     galleryItems: Array.isArray(source.galleryItems) ? JSON.parse(JSON.stringify(source.galleryItems)) : [],
     queryResultCopySeed: Boolean(source.queryResultCopySeed),
+    canvasImport: source.canvasImport ?? null,
     importedMetadata: source.importedMetadata ?? null,
     savedSettings: normalizeSavedSettings(source.savedSettings),
   };
@@ -154,6 +161,7 @@ async function importStorageSnapshot(event) {
     state.selectedImageIds = incoming.selectedImageIds;
     state.galleryItems = incoming.galleryItems;
     state.queryResultCopySeed = incoming.queryResultCopySeed;
+    state.canvasImport = incoming.canvasImport;
     state.importedMetadata = incoming.importedMetadata;
     state.savedSettings = incoming.savedSettings;
     saveState();
@@ -436,6 +444,108 @@ function initMetadataPage() {
   });
 }
 
+function initCanvasPage() {
+  const dom = {
+    canvas: document.querySelector("#canvas-stage"),
+    file: document.querySelector("#canvas-file"),
+    mode: document.querySelector("#canvas-mode"),
+    toolButtons: document.querySelectorAll("[data-canvas-tool]"),
+    brushSize: document.querySelector("#canvas-brush-size"),
+    brushOpacity: document.querySelector("#canvas-brush-opacity"),
+    color: document.querySelector("#canvas-color"),
+    x: document.querySelector("#canvas-x"),
+    y: document.querySelector("#canvas-y"),
+    scale: document.querySelector("#canvas-scale"),
+    rotation: document.querySelector("#canvas-rotation"),
+    prompt: document.querySelector("#canvas-prompt"),
+    negativePrompt: document.querySelector("#canvas-negative"),
+    width: document.querySelector("#canvas-width"),
+    height: document.querySelector("#canvas-height"),
+    steps: document.querySelector("#canvas-steps"),
+    cfgScale: document.querySelector("#canvas-cfg"),
+    seed: document.querySelector("#canvas-seed"),
+    denoisingStrength: document.querySelector("#canvas-denoise"),
+    modelId: document.querySelector("#canvas-model-id"),
+    modelFileId: document.querySelector("#canvas-model-file-id"),
+    body: document.querySelector("#canvas-body"),
+    stats: document.querySelector("#canvas-stats"),
+    build: document.querySelector("#canvas-build"),
+    applyToSend: document.querySelector("#canvas-apply-send"),
+    clearMask: document.querySelector("#canvas-clear-mask"),
+    clearPaint: document.querySelector("#canvas-clear-paint"),
+  };
+
+  if (!dom.canvas) return;
+
+  const editor = createCanvasEditor(dom.canvas, dom);
+  renderCanvasEditor(editor);
+  applyCanvasImport(editor, dom);
+  updateCanvasBodyPreview(editor, dom);
+
+  dom.file.addEventListener("change", (event) => loadCanvasBaseImage(event, editor, dom));
+  dom.mode.addEventListener("change", () => updateCanvasBodyPreview(editor, dom));
+  dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom));
+  dom.applyToSend.addEventListener("click", () => {
+    const draft = buildCanvasEditorDraftFromDom(editor, dom);
+    state.send.url = draft.url;
+    state.send.method = draft.method;
+    state.send.headers = {
+      ...getCanvasInheritedHeaders(),
+      "content-type": draft.contentType,
+    };
+    state.send.bodyText = JSON.stringify(draft.body, null, 2);
+    saveState();
+    dom.stats.textContent = "已套用到 Dashboard 的 API 1 Body。";
+  });
+  dom.clearMask.addEventListener("click", () => {
+    editor.maskCtx.clearRect(0, 0, editor.maskCanvas.width, editor.maskCanvas.height);
+    renderCanvasEditor(editor);
+    updateCanvasBodyPreview(editor, dom);
+  });
+  dom.clearPaint.addEventListener("click", () => {
+    editor.paintCtx.clearRect(0, 0, editor.paintCanvas.width, editor.paintCanvas.height);
+    renderCanvasEditor(editor);
+    updateCanvasBodyPreview(editor, dom);
+  });
+
+  dom.toolButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      editor.tool = button.dataset.canvasTool;
+      dom.toolButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+    });
+  });
+
+  [dom.x, dom.y, dom.scale, dom.rotation].forEach((input) => {
+    input.addEventListener("input", () => {
+      editor.transform.x = Number(dom.x.value);
+      editor.transform.y = Number(dom.y.value);
+      editor.transform.scale = Number(dom.scale.value) / 100;
+      editor.transform.rotation = Number(dom.rotation.value);
+      renderCanvasEditor(editor);
+    });
+  });
+
+  [
+    dom.prompt,
+    dom.negativePrompt,
+    dom.width,
+    dom.height,
+    dom.steps,
+    dom.cfgScale,
+    dom.seed,
+    dom.denoisingStrength,
+    dom.modelId,
+    dom.modelFileId,
+  ].forEach((input) => {
+    input.addEventListener("input", () => updateCanvasBodyPreview(editor, dom));
+  });
+
+  dom.canvas.addEventListener("pointerdown", (event) => handleCanvasPointerDown(event, editor, dom));
+  dom.canvas.addEventListener("pointermove", (event) => handleCanvasPointerMove(event, editor, dom));
+  dom.canvas.addEventListener("pointerup", () => { editor.pointer = null; });
+  dom.canvas.addEventListener("pointerleave", () => { editor.pointer = null; });
+}
+
 function bindRequestSection(prefix) {
   return {
     sourceFold: document.querySelector(`#${prefix}-source-fold`),
@@ -692,9 +802,8 @@ function renderGallery(dom) {
     return;
   }
 
-  dom.stats.textContent = `共 ${state.galleryItems.length} 張圖片，可勾選後同步到 post 的 generationImageIds。`;
+  dom.stats.textContent = `共 ${state.galleryItems.length} 張圖片，可直接送到 Canvas Editor 做 Inpaint 或 Img2Img。`;
   dom.root.innerHTML = state.galleryItems.map((entry, index) => {
-    const checked = state.selectedImageIds.includes(entry.generationImageId) ? "checked" : "";
     return `
       <article class="gallery-card">
         <img src="${escapeHtml(entry.url)}" alt="Task ${escapeHtml(entry.taskId)}">
@@ -704,11 +813,8 @@ function renderGallery(dom) {
             <span class="pill">${escapeHtml(entry.status || "UNKNOWN")}</span>
           </div>
           <div class="gallery-selection">
-            <label class="gallery-selection-label" for="pick-${index}">
-              <input type="checkbox" id="pick-${index}" data-image-id="${escapeHtml(entry.generationImageId)}" ${checked}>
-              選入 Post
-            </label>
-            <button type="button" class="remax-button" data-action="copy-to-send" data-index="${index}">remax</button>
+            <button type="button" class="remix-button" data-action="remix-inpaint" data-index="${index}">Inpaint</button>
+            <button type="button" class="remix-button" data-action="remix-img2img" data-index="${index}">Img2Img</button>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
@@ -722,13 +828,6 @@ function renderGallery(dom) {
       </article>
     `;
   }).join("");
-
-  dom.root.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-    checkbox.addEventListener("change", (event) => {
-      toggleSelectedImageId(event.target.dataset.imageId, event.target.checked);
-      renderGallery(dom);
-    });
-  });
 
   dom.root.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleGalleryAction(button.dataset.action, Number(button.dataset.index), dom));
@@ -809,6 +908,14 @@ function extractBlobFromImageElement(imgElement, targetMimeType) {
 async function handleGalleryAction(action, index, dom) {
   const entry = state.galleryItems[index];
   if (!entry) return;
+
+  if (action === "remix-inpaint" || action === "remix-img2img") {
+    const mode = action === "remix-inpaint" ? "inpaint" : "img2img";
+    state.canvasImport = buildCanvasImportFromGalleryEntry(entry, mode);
+    saveState();
+    window.location.href = "./canvas.html";
+    return;
+  }
 
   if (action === "copy-to-send") {
     copyGenerationToSendBody(entry, dom);
@@ -899,6 +1006,29 @@ function copyGenerationToSendBody(entry, dom) {
   } catch (error) {
     dom.stats.textContent = `無法複製生成資料：${error.message}`;
   }
+}
+
+function buildCanvasImportFromGalleryEntry(entry, mode) {
+  const metadata = entry.metadata || {};
+  const imageUrl = entry.url || metadata.imageUrl || "";
+  return {
+    mode,
+    imageUrl,
+    imageId: entry.generationImageId || metadata.imageId || "",
+    taskId: entry.taskId || "",
+    prompt: metadata.prompt || "",
+    negativePrompt: metadata.negativePrompt || "",
+    width: castNumber(metadata.width, ""),
+    height: castNumber(metadata.height, ""),
+    steps: castNumber(metadata.steps, ""),
+    cfgScale: castNumber(metadata.cfgScale, ""),
+    seed: String(metadata.seed || "-1"),
+    denoisingStrength: castNumber(metadata.denoisingStrength, ""),
+    modelId: metadata.modelId ? String(metadata.modelId) : "",
+    modelFileId: metadata.modelFileId ? String(metadata.modelFileId) : "",
+    ksamplerName: metadata.kSampler || metadata.sampler || "euler_ancestral",
+    schedule: metadata.schedule || "normal",
+  };
 }
 
 function parsePowerShellRequest(text) {
@@ -1165,6 +1295,404 @@ function applyGenerationMetadataToBody(bodyText, metadata, options = {}) {
 
   payload.params = params;
   return JSON.stringify(payload, null, 2);
+}
+
+function buildCanvasEditorRequestDraft(input) {
+  const params = {
+    baseModel: {
+      modelId: String(input.modelId || ""),
+      modelFileId: String(input.modelFileId || ""),
+    },
+    sdxl: { refiner: false },
+    models: [],
+    embeddingModels: [],
+    sdVae: input.sdVae || "Automatic",
+    prompt: input.prompt || "",
+    negativePrompt: input.negativePrompt || "",
+    height: castNumber(input.height, 1024),
+    width: castNumber(input.width, 1024),
+    imageCount: castNumber(input.imageCount, 1),
+    steps: castNumber(input.steps, 25),
+    images: input.imageDataUrl ? [input.imageDataUrl] : [],
+    cfgScale: castNumber(input.cfgScale, 5),
+    seed: String(input.seed || "-1"),
+    clipSkip: castNumber(input.clipSkip, 2),
+    etaNoiseSeedDelta: castNumber(input.etaNoiseSeedDelta, 31327),
+    v1Clip: true,
+    enablePix2pix: false,
+    guidance: castNumber(input.guidance, 3.5),
+    useFirstLastFrame: false,
+    ksamplerName: input.ksamplerName || "euler_ancestral",
+    schedule: input.schedule || "normal",
+    denoisingStrength: castNumber(input.denoisingStrength, 0.51),
+  };
+
+  if (input.mode === "inpaint") {
+    params.inpaint = {
+      maskImage: input.maskDataUrl || "",
+      maskBlur: castNumber(input.maskBlur, 4),
+    };
+
+    return {
+      url: "https://api.tensor.art/works/v1/works/task_by_image",
+      method: "POST",
+      contentType: "application/json",
+      body: {
+        params,
+        credits: castNumber(input.credits, 3.66),
+        taskType: "IMAGE_TO_INPAINT",
+        imageUrl: input.imageDataUrl || "",
+        imageId: input.imageId || "",
+      },
+    };
+  }
+
+  return {
+    url: "https://api.tensor.art/works/v1/works/task",
+    method: "POST",
+    contentType: "text/plain;charset=UTF-8",
+    body: {
+      params,
+      credits: castNumber(input.credits, 3.66),
+      taskType: "IMG2IMG",
+      isRemix: true,
+      remixPostId: input.remixPostId || "",
+      remixPostImageId: input.remixPostImageId || "",
+      captchaType: "CLOUDFLARE_TURNSTILE",
+    },
+  };
+}
+
+function getCanvasInheritedHeaders() {
+  const candidates = [state.send.headers, state.query.headers, state.post.headers];
+  const inherited = candidates.find((headers) => headers && Object.keys(headers).length) || {};
+  return sanitizeHeaders(inherited);
+}
+
+function createCanvasEditor(canvas, dom) {
+  const paintCanvas = document.createElement("canvas");
+  const maskCanvas = document.createElement("canvas");
+  const width = 1024;
+  const height = 768;
+
+  canvas.width = width;
+  canvas.height = height;
+  paintCanvas.width = width;
+  paintCanvas.height = height;
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+
+  return {
+    canvas,
+    ctx: canvas.getContext("2d"),
+    paintCanvas,
+    paintCtx: paintCanvas.getContext("2d"),
+    maskCanvas,
+    maskCtx: maskCanvas.getContext("2d"),
+    baseImage: null,
+    imageDataUrl: "",
+    sourceImageUrl: "",
+    imageId: "",
+    taskId: "",
+    ksamplerName: "euler_ancestral",
+    schedule: "normal",
+    tool: "move",
+    pointer: null,
+    transform: {
+      x: Number(dom.x.value),
+      y: Number(dom.y.value),
+      scale: Number(dom.scale.value) / 100,
+      rotation: Number(dom.rotation.value),
+    },
+  };
+}
+
+function loadCanvasBaseImage(event, editor, dom) {
+  const [file] = event.target.files || [];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      editor.baseImage = image;
+      editor.imageDataUrl = String(reader.result || "");
+      editor.sourceImageUrl = "";
+      editor.imageId = "";
+      editor.taskId = "";
+      const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
+      editor.transform = {
+        x: Math.round(editor.canvas.width / 2),
+        y: Math.round(editor.canvas.height / 2),
+        scale: Number.isFinite(fitScale) ? fitScale : 1,
+        rotation: 0,
+      };
+      dom.x.value = String(editor.transform.x);
+      dom.y.value = String(editor.transform.y);
+      dom.scale.value = String(Math.round(editor.transform.scale * 100));
+      dom.rotation.value = "0";
+      renderCanvasEditor(editor);
+      updateCanvasBodyPreview(editor, dom);
+      dom.stats.textContent = `已載入本地圖片：${file.name}`;
+    };
+    image.src = String(reader.result || "");
+  };
+  reader.readAsDataURL(file);
+}
+
+function applyCanvasImport(editor, dom) {
+  const incoming = state.canvasImport;
+  if (!incoming) return;
+
+  dom.mode.value = incoming.mode || "img2img";
+  dom.prompt.value = incoming.prompt || "";
+  dom.negativePrompt.value = incoming.negativePrompt || "";
+  if (incoming.width) dom.width.value = String(incoming.width);
+  if (incoming.height) dom.height.value = String(incoming.height);
+  if (incoming.steps) dom.steps.value = String(incoming.steps);
+  if (incoming.cfgScale) dom.cfgScale.value = String(incoming.cfgScale);
+  dom.seed.value = String(incoming.seed || "-1");
+  if (incoming.denoisingStrength) dom.denoisingStrength.value = String(incoming.denoisingStrength);
+  dom.modelId.value = incoming.modelId || "";
+  dom.modelFileId.value = incoming.modelFileId || "";
+
+  editor.imageDataUrl = incoming.imageUrl || "";
+  editor.sourceImageUrl = incoming.imageUrl || "";
+  editor.imageId = incoming.imageId || "";
+  editor.taskId = incoming.taskId || "";
+  editor.ksamplerName = incoming.ksamplerName || editor.ksamplerName;
+  editor.schedule = incoming.schedule || editor.schedule;
+
+  if (incoming.imageUrl) {
+    loadCanvasImageUrl(incoming.imageUrl, editor, dom);
+  }
+
+  dom.stats.textContent = incoming.mode === "inpaint"
+    ? "已從 Query Results 帶入 Inpaint。"
+    : "已從 Query Results 帶入 Img2Img。";
+}
+
+function loadCanvasImageUrl(url, editor, dom) {
+  const image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    editor.baseImage = image;
+    const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
+    editor.transform = {
+      x: Math.round(editor.canvas.width / 2),
+      y: Math.round(editor.canvas.height / 2),
+      scale: Number.isFinite(fitScale) ? fitScale : 1,
+      rotation: 0,
+    };
+    dom.x.value = String(editor.transform.x);
+    dom.y.value = String(editor.transform.y);
+    dom.scale.value = String(Math.round(editor.transform.scale * 100));
+    dom.rotation.value = "0";
+    renderCanvasEditor(editor);
+    updateCanvasBodyPreview(editor, dom);
+  };
+  image.onerror = () => {
+    dom.stats.textContent = "圖片連結無法載入到畫布，Body 仍會使用原圖 URL。";
+    updateCanvasBodyPreview(editor, dom);
+  };
+  image.src = url;
+}
+
+function handleCanvasPointerDown(event, editor, dom) {
+  const point = canvasEventPoint(event, editor.canvas);
+  editor.canvas.setPointerCapture?.(event.pointerId);
+
+  if (editor.tool === "eyedropper") {
+    const pixel = editor.ctx.getImageData(point.x, point.y, 1, 1).data;
+    dom.color.value = rgbToHex(pixel[0], pixel[1], pixel[2]);
+    dom.stats.textContent = `已吸色 ${dom.color.value}`;
+    return;
+  }
+
+  editor.pointer = {
+    x: point.x,
+    y: point.y,
+    transformX: editor.transform.x,
+    transformY: editor.transform.y,
+  };
+
+  if (editor.tool !== "move") {
+    drawCanvasStroke(point, point, editor, dom);
+    renderCanvasEditor(editor);
+    updateCanvasBodyPreview(editor, dom);
+  }
+}
+
+function handleCanvasPointerMove(event, editor, dom) {
+  if (!editor.pointer) return;
+  const point = canvasEventPoint(event, editor.canvas);
+
+  if (editor.tool === "move") {
+    editor.transform.x = Math.round(editor.pointer.transformX + point.x - editor.pointer.x);
+    editor.transform.y = Math.round(editor.pointer.transformY + point.y - editor.pointer.y);
+    dom.x.value = String(editor.transform.x);
+    dom.y.value = String(editor.transform.y);
+    renderCanvasEditor(editor);
+    return;
+  }
+
+  drawCanvasStroke(editor.pointer, point, editor, dom);
+  editor.pointer = { ...editor.pointer, x: point.x, y: point.y };
+  renderCanvasEditor(editor);
+  updateCanvasBodyPreview(editor, dom);
+}
+
+function drawCanvasStroke(from, to, editor, dom) {
+  const size = Number(dom.brushSize.value || 20);
+  const opacity = Number(dom.brushOpacity.value || 70) / 100;
+  const target = editor.tool === "mask" ? editor.maskCtx : editor.paintCtx;
+
+  target.save();
+  target.lineCap = "round";
+  target.lineJoin = "round";
+  target.lineWidth = size;
+
+  if (editor.tool === "eraser") {
+    target.globalCompositeOperation = "destination-out";
+    target.strokeStyle = "rgba(0,0,0,1)";
+  } else if (editor.tool === "mask") {
+    target.globalAlpha = opacity;
+    target.strokeStyle = "#ffffff";
+  } else {
+    target.globalAlpha = opacity;
+    target.strokeStyle = dom.color.value || "#d9480f";
+  }
+
+  target.beginPath();
+  target.moveTo(from.x, from.y);
+  target.lineTo(to.x, to.y);
+  target.stroke();
+  target.restore();
+}
+
+function renderCanvasEditor(editor) {
+  const { ctx, canvas } = editor;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawCanvasGrid(ctx, canvas.width, canvas.height);
+
+  if (editor.baseImage) {
+    ctx.save();
+    ctx.translate(editor.transform.x, editor.transform.y);
+    ctx.rotate((editor.transform.rotation * Math.PI) / 180);
+    ctx.scale(editor.transform.scale, editor.transform.scale);
+    ctx.drawImage(editor.baseImage, -editor.baseImage.width / 2, -editor.baseImage.height / 2);
+    ctx.restore();
+  }
+
+  ctx.drawImage(editor.paintCanvas, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = "#ff3d5a";
+  ctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(tintCanvas(editor.maskCanvas, "#ff3d5a"), 0, 0);
+  ctx.restore();
+}
+
+function drawCanvasGrid(ctx, width, height) {
+  ctx.fillStyle = "#f9f5ed";
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = "rgba(36, 22, 15, 0.06)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= width; x += 32) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= height; y += 32) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+}
+
+function tintCanvas(source, color) {
+  const tinted = document.createElement("canvas");
+  tinted.width = source.width;
+  tinted.height = source.height;
+  const ctx = tinted.getContext("2d");
+  ctx.drawImage(source, 0, 0);
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, tinted.width, tinted.height);
+  return tinted;
+}
+
+function canvasEventPoint(event, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: Math.round((event.clientX - rect.left) * (canvas.width / rect.width)),
+    y: Math.round((event.clientY - rect.top) * (canvas.height / rect.height)),
+  };
+}
+
+function buildCanvasEditorDraftFromDom(editor, dom) {
+  return buildCanvasEditorRequestDraft({
+    mode: dom.mode.value,
+    prompt: dom.prompt.value,
+    negativePrompt: dom.negativePrompt.value,
+    imageDataUrl: exportCanvasImage(editor),
+    maskDataUrl: editor.maskCanvas.toDataURL("image/png"),
+    imageId: editor.imageId,
+    remixPostId: editor.taskId,
+    remixPostImageId: editor.imageId,
+    width: dom.width.value,
+    height: dom.height.value,
+    steps: dom.steps.value,
+    cfgScale: dom.cfgScale.value,
+    seed: dom.seed.value,
+    denoisingStrength: dom.denoisingStrength.value,
+    modelId: dom.modelId.value,
+    modelFileId: dom.modelFileId.value,
+    guidance: 3.5,
+    clipSkip: 2,
+    ksamplerName: editor.ksamplerName || "euler_ancestral",
+    schedule: editor.schedule || "normal",
+  });
+}
+
+function exportCanvasImage(editor) {
+  if (!editor.baseImage && editor.sourceImageUrl) {
+    return editor.sourceImageUrl;
+  }
+
+  const output = document.createElement("canvas");
+  output.width = editor.canvas.width;
+  output.height = editor.canvas.height;
+  const ctx = output.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, output.width, output.height);
+
+  if (editor.baseImage) {
+    ctx.save();
+    ctx.translate(editor.transform.x, editor.transform.y);
+    ctx.rotate((editor.transform.rotation * Math.PI) / 180);
+    ctx.scale(editor.transform.scale, editor.transform.scale);
+    ctx.drawImage(editor.baseImage, -editor.baseImage.width / 2, -editor.baseImage.height / 2);
+    ctx.restore();
+  }
+
+  ctx.drawImage(editor.paintCanvas, 0, 0);
+  try {
+    return output.toDataURL("image/png");
+  } catch {
+    return editor.sourceImageUrl || editor.imageDataUrl || "";
+  }
+}
+
+function updateCanvasBodyPreview(editor, dom) {
+  const draft = buildCanvasEditorDraftFromDom(editor, dom);
+  dom.body.value = JSON.stringify(draft.body, null, 2);
+}
+
+function rgbToHex(r, g, b) {
+  return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function castNumber(value, fallback) {
