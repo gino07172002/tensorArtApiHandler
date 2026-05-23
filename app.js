@@ -1462,7 +1462,7 @@ function buildCanvasEditorRequestDraft(input) {
     return {
       url: "https://api.tensor.art/works/v1/works/task_by_image",
       method: "POST",
-      contentType: "application/json",
+      contentType: "text/plain;charset=UTF-8",
       body: {
         params,
         credits: castNumber(input.credits, 3.66),
@@ -1809,11 +1809,36 @@ function loadCanvasImageUrlWithFallback(url, editor, dom) {
   const attempts = createCanvasImageLoadAttempts(url);
   let index = 0;
 
+  const tryFetchBlob = async () => {
+    try {
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const image = new Image();
+      image.onload = () => {
+        editor.baseImage = image;
+        adoptCanvasImageDimensions(editor, dom, image, { matchSize: !editor.importHadDims });
+        renderCanvasEditor(editor);
+        updateCanvasBodyPreview(editor, dom);
+        dom.stats.textContent = "Image loaded via fetch fallback (mask + edits export to dataURL).";
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        dom.stats.textContent = "Image could not be loaded. The API body will keep the original image URL.";
+        updateCanvasBodyPreview(editor, dom);
+      };
+      image.src = objectUrl;
+    } catch (error) {
+      dom.stats.textContent = `Image could not be loaded (${error.message}). The API body will keep the original image URL.`;
+      updateCanvasBodyPreview(editor, dom);
+    }
+  };
+
   const tryLoad = () => {
     const attempt = attempts[index];
     if (!attempt) {
-      dom.stats.textContent = "Image could not be loaded. The API body will keep the original image URL.";
-      updateCanvasBodyPreview(editor, dom);
+      tryFetchBlob();
       return;
     }
 

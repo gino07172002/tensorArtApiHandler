@@ -236,7 +236,7 @@ const canvasBase = {
 const inpaintDraft = buildCanvasEditorRequestDraft({ ...canvasBase, mode: "inpaint" });
 assert.equal(inpaintDraft.url, "https://api.tensor.art/works/v1/works/task_by_image");
 assert.equal(inpaintDraft.method, "POST");
-assert.equal(inpaintDraft.contentType, "application/json");
+assert.equal(inpaintDraft.contentType, "text/plain;charset=UTF-8");
 assert.equal(inpaintDraft.body.taskType, "IMAGE_TO_INPAINT");
 assert.equal(inpaintDraft.body.params.inpaint.maskImage, canvasBase.maskDataUrl);
 assert.deepEqual(plain(inpaintDraft.body.params.images), [canvasBase.imageDataUrl]);
