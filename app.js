@@ -1653,28 +1653,16 @@ async function sendCanvasRequest(editor, dom) {
 
     const maskHasContent = !isCanvasBlank(editor.maskCanvas);
     const modeIsInpaint = dom.mode.value === "inpaint";
-    console.log("[Canvas Send] mode:", dom.mode.value, "maskHasContent:", maskHasContent);
     if (modeIsInpaint && maskHasContent) {
-      dom.stats.textContent = "上傳 mask 中...";
-      const uploadedMaskUrl = await uploadMaskToTensor(editor, baseHeaders);
-      if (!payload.params) payload.params = {};
-      if (!payload.params.inpaint) payload.params.inpaint = {};
-      payload.params.inpaint.maskImage = uploadedMaskUrl;
-
-      if (!payload.imageUrl && (editor.sourceImageUrl || draft.body.imageUrl)) {
-        payload.imageUrl = editor.sourceImageUrl || draft.body.imageUrl;
+      const currentMask = payload?.params?.inpaint?.maskImage || "";
+      if (currentMask.startsWith("data:")) {
+        throw new Error(
+          "你塗的 mask 需要上傳到 tensor.art 的 R2，但這個工具放在 GitHub Pages，被 CORS 擋住無法上傳。\n\n" +
+          "解法：\n" +
+          "(A) 在 tensor.art 上先塗好 mask 並送一次（讓它幫你產生 R2 mask URL），再把那份 PowerShell 貼進來，這個工具不重塗 mask 直接 Send 即可\n" +
+          "(B) 等之後做 Tampermonkey userscript 版本"
+        );
       }
-      if (!payload.imageId && (editor.imageId || draft.body.imageId)) {
-        payload.imageId = editor.imageId || draft.body.imageId;
-      }
-      if (payload.params && Array.isArray(payload.params.images) && payload.params.images.length === 0) {
-        const src = editor.sourceImageUrl || draft.body.imageUrl;
-        if (src) payload.params.images = [src];
-      }
-
-      bodyText = JSON.stringify(payload, null, 2);
-      dom.body.value = bodyText;
-      dom.stats.textContent = `Mask 上傳完成: ${uploadedMaskUrl.substring(0, 60)}... 送出 inpaint...`;
     }
 
     state.canvasRequest = {
@@ -1712,6 +1700,8 @@ async function sendCanvasRequest(editor, dom) {
   }
 }
 
+// Reserved for the Tampermonkey/same-origin build — GitHub Pages can't hit
+// pre_sign or R2 due to CORS. Keep ready for when we ship a userscript wrapper.
 async function uploadMaskToTensor(editor, baseHeaders) {
   const maskBlob = await renderMaskAsJpegBlob(editor);
 
