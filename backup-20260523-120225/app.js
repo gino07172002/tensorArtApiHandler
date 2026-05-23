@@ -21,97 +21,6 @@ const FORBIDDEN_HEADERS = new Set([
   "sec-fetch-mode",
   "sec-fetch-site",
 ]);
-const SHARED_HEADER_NAMES = new Set([
-  "x-echoing-env",
-  "x-request-lang",
-  "x-request-package-id",
-  "x-request-package-sign-version",
-  "x-request-sign",
-  "x-request-sign-type",
-  "x-request-sign-version",
-  "x-request-timestamp",
-]);
-const REQUEST_KEYS = ["send", "query", "post"];
-const API_URL_MATCHERS = {
-  send: /\/works\/v1\/works\/task$/i,
-  query: /\/works\/v1\/works\/tasks\/query$/i,
-  post: /\/community-web\/v1\/post\/create$/i,
-};
-const DEFAULT_REQUESTS = {
-  send: {
-    url: "https://api.tensor.art/works/v1/works/task",
-    method: "POST",
-    headers: {
-      accept: "*/*",
-      "accept-language": "zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5",
-    },
-    body: {
-      params: {
-        baseModel: {
-          modelId: "990778216270553015",
-          modelFileId: "990778216270553016",
-        },
-        sdxl: {
-          refiner: false,
-        },
-        models: [],
-        embeddingModels: [],
-        sdVae: "Automatic",
-        prompt: "adult elf woman, sideless fantasy outfit, fantasy, elegant, beautiful, detailed fantasy illustration, non-explicit",
-        negativePrompt: "bad quality,worst quality,worst detail,sketch,censor,bad body proportions ,",
-        height: 1536,
-        width: 1024,
-        imageCount: 1,
-        steps: 25,
-        images: [],
-        cfgScale: 5,
-        seed: "-1",
-        clipSkip: 2,
-        etaNoiseSeedDelta: 31327,
-        v1Clip: true,
-        enablePix2pix: false,
-        guidance: 3.5,
-        useFirstLastFrame: false,
-        samplerName: "Euler a",
-      },
-      credits: 1.31,
-      taskType: "TXT2IMG",
-      isRemix: false,
-      captchaType: "CLOUDFLARE_TURNSTILE",
-    },
-  },
-  query: {
-    url: "https://api.tensor.art/works/v1/works/tasks/query",
-    method: "POST",
-    headers: {
-      accept: "*/*",
-      "accept-language": "zh-TW,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,ja;q=0.5",
-    },
-    body: {
-      size: 30,
-      cursor: "0",
-      returnAllTask: true,
-      isSortAsc: false,
-      startedAt: "0",
-      endedAt: "0",
-    },
-  },
-  post: {
-    url: "https://api.tensor.art/community-web/v1/post/create",
-    method: "POST",
-    headers: {
-      accept: "*/*",
-      "accept-language": "zh-TW,zh;q=0.9",
-    },
-    body: {
-      content: "",
-      tags: [],
-      title: "",
-      channelId: "107",
-      generationImageIds: [],
-    },
-  },
-};
 
 const state = loadState();
 const page = document.body.dataset.page;
@@ -147,34 +56,11 @@ function blankRequestState() {
   };
 }
 
-function getDefaultRequestState(key) {
-  const defaults = DEFAULT_REQUESTS[key];
-  const blank = blankRequestState();
-
-  if (!defaults) return blank;
-
-  return {
-    ...blank,
-    url: defaults.url,
-    method: defaults.method,
-    headers: JSON.parse(JSON.stringify(defaults.headers)),
-    bodyText: JSON.stringify(defaults.body, null, 2),
-  };
-}
-
-function blankCommonState() {
-  return {
-    powershell: "",
-    headers: {},
-  };
-}
-
 function loadState() {
   const base = {
-    common: blankCommonState(),
-    send: getDefaultRequestState("send"),
-    query: getDefaultRequestState("query"),
-    post: getDefaultRequestState("post"),
+    send: blankRequestState(),
+    query: blankRequestState(),
+    post: blankRequestState(),
     selectedImageIds: [],
     galleryItems: [],
     importedMetadata: null,
@@ -186,19 +72,15 @@ function loadState() {
 
   try {
     const parsed = JSON.parse(saved);
-    const loaded = {
-      common: { ...blankCommonState(), ...(parsed.common || {}) },
-      send: { ...getDefaultRequestState("send"), ...(parsed.send || {}) },
-      query: { ...getDefaultRequestState("query"), ...(parsed.query || {}) },
-      post: { ...getDefaultRequestState("post"), ...(parsed.post || {}) },
+    return {
+      send: { ...blankRequestState(), ...(parsed.send || {}) },
+      query: { ...blankRequestState(), ...(parsed.query || {}) },
+      post: { ...blankRequestState(), ...(parsed.post || {}) },
       selectedImageIds: Array.isArray(parsed.selectedImageIds) ? parsed.selectedImageIds : [],
       galleryItems: Array.isArray(parsed.galleryItems) ? parsed.galleryItems : [],
       importedMetadata: parsed.importedMetadata ?? null,
       savedSettings: parsed.savedSettings || { send: [], query: [], post: [] },
     };
-
-    migrateSharedHeaders(loaded);
-    return loaded;
   } catch {
     return base;
   }
@@ -212,10 +94,6 @@ function cloneRequestDraft(request) {
   return { ...blankRequestState(), ...JSON.parse(JSON.stringify(request || {})) };
 }
 
-function cloneCommonDraft(common) {
-  return { ...blankCommonState(), ...JSON.parse(JSON.stringify(common || {})) };
-}
-
 function normalizeSavedSettings(savedSettings) {
   const source = savedSettings || {};
   return {
@@ -227,7 +105,6 @@ function normalizeSavedSettings(savedSettings) {
 
 function buildSnapshotData(source) {
   return {
-    common: cloneCommonDraft(source.common),
     send: cloneRequestDraft(source.send),
     query: cloneRequestDraft(source.query),
     post: cloneRequestDraft(source.post),
@@ -236,82 +113,6 @@ function buildSnapshotData(source) {
     importedMetadata: source.importedMetadata ?? null,
     savedSettings: normalizeSavedSettings(source.savedSettings),
   };
-}
-
-function extractSharedHeaders(headers) {
-  return Object.fromEntries(
-    Object.entries(sanitizeHeaders(headers || {})).filter(([key, value]) => (
-      SHARED_HEADER_NAMES.has(key.toLowerCase())
-      && (key.toLowerCase() === "x-echoing-env" || String(value ?? "").trim())
-    )),
-  );
-}
-
-function getRequestSpecificHeaders(headers) {
-  return Object.fromEntries(
-    Object.entries(sanitizeHeaders(headers || {})).filter(([key]) => (
-      !SHARED_HEADER_NAMES.has(key.toLowerCase())
-      && key.toLowerCase() !== "authorization"
-    )),
-  );
-}
-
-function buildEffectiveHeaders(requestHeaders, sharedHeaders) {
-  return sanitizeHeaders({
-    ...getRequestSpecificHeaders(requestHeaders),
-    ...extractSharedHeaders(sharedHeaders),
-  });
-}
-
-function migrateSharedHeaders(loaded) {
-  const existingSharedHeaders = extractSharedHeaders(loaded.common?.headers || {});
-  const inferredHeaders = REQUEST_KEYS.reduce((headers, key) => ({
-    ...headers,
-    ...extractSharedHeaders(loaded[key]?.headers || {}),
-  }), {});
-
-  loaded.common = {
-    ...blankCommonState(),
-    ...(loaded.common || {}),
-    headers: {
-      ...inferredHeaders,
-      ...existingSharedHeaders,
-    },
-  };
-
-  if (!loaded.common.powershell) {
-    const source = REQUEST_KEYS.map((key) => loaded[key]?.powershell).find(Boolean);
-    loaded.common.powershell = source || "";
-  }
-
-  REQUEST_KEYS.forEach((key) => {
-    loaded[key] = {
-      ...blankRequestState(),
-      ...(loaded[key] || {}),
-      headers: getRequestSpecificHeaders(loaded[key]?.headers || {}),
-    };
-  });
-}
-
-function findRequestKeyForUrl(url) {
-  return Object.entries(API_URL_MATCHERS).find(([, pattern]) => pattern.test(url || ""))?.[0] || null;
-}
-
-function applyParsedPowerShellToRequestState(request, common, parsed) {
-  const sharedHeaders = extractSharedHeaders(parsed.headers);
-  common.powershell = parsed.powershell;
-  common.headers = {
-    ...(common.headers || {}),
-    ...sharedHeaders,
-  };
-
-  Object.assign(request, {
-    powershell: parsed.powershell,
-    url: parsed.url,
-    method: parsed.method,
-    headers: getRequestSpecificHeaders(parsed.headers),
-    bodyText: parsed.bodyText,
-  });
 }
 
 function bindCommonControls() {
@@ -324,7 +125,6 @@ function bindCommonControls() {
   importButton?.addEventListener("click", () => importFile?.click());
   importFile?.addEventListener("change", importStorageSnapshot);
   clearButton?.addEventListener("click", clearStorage);
-  bindCommonSignatureControls();
 }
 
 function exportStorageSnapshot() {
@@ -364,85 +164,6 @@ function clearStorage() {
   location.reload();
 }
 
-function bindCommonSignatureControls() {
-  const dom = {
-    powershell: document.querySelector("#common-powershell"),
-    parseButton: document.querySelector("#common-parse"),
-    headers: document.querySelector("#common-headers"),
-    summary: document.querySelector("#common-summary"),
-    status: document.querySelector("#common-status"),
-  };
-
-  if (!dom.powershell && !dom.headers) return;
-
-  renderCommonSignatureControls(dom);
-
-  dom.powershell?.addEventListener("input", (event) => {
-    state.common.powershell = event.target.value;
-    saveState();
-  });
-
-  dom.headers?.addEventListener("input", (event) => {
-    try {
-      state.common.headers = extractSharedHeaders(JSON.parse(event.target.value || "{}"));
-    } catch {
-      state.common.headers = {};
-    }
-    saveState();
-    renderCommonSignatureControls(dom);
-  });
-
-  dom.parseButton?.addEventListener("click", () => {
-    try {
-      const parsed = parsePowerShellRequest(dom.powershell.value);
-      const matchedKey = findRequestKeyForUrl(parsed.url);
-      const sharedHeaders = extractSharedHeaders(parsed.headers);
-
-      if (!Object.keys(sharedHeaders).length) {
-        throw new Error("No TensorArt x-request signature headers found.");
-      }
-
-      state.common.powershell = parsed.powershell;
-      state.common.headers = {
-        ...state.common.headers,
-        ...sharedHeaders,
-      };
-
-      if (matchedKey) {
-        applyParsedPowerShellToRequestState(state[matchedKey], state.common, parsed);
-        state[matchedKey].bodyText = formatJsonString(state[matchedKey].bodyText);
-      }
-
-      saveState();
-      renderCommonSignatureControls(dom);
-      if (matchedKey && page !== "metadata") {
-        const section = bindRequestSection(matchedKey);
-        if (section.body) renderRequestSection(matchedKey, section);
-      }
-      setCommonStatus(dom, matchedKey
-        ? `Updated shared signature and ${matchedKey} request defaults.`
-        : "Updated shared signature headers.");
-    } catch (error) {
-      setCommonStatus(dom, `Parse failed: ${error.message}`);
-    }
-  });
-}
-
-function renderCommonSignatureControls(dom) {
-  if (dom.powershell) dom.powershell.value = state.common.powershell || "";
-  if (dom.headers) dom.headers.value = JSON.stringify(extractSharedHeaders(state.common.headers), null, 2);
-  if (dom.summary) {
-    const count = Object.keys(extractSharedHeaders(state.common.headers)).length;
-    dom.summary.textContent = count
-      ? `Shared TensorArt signature headers: ${count} ready`
-      : "Shared TensorArt signature headers: not set";
-  }
-}
-
-function setCommonStatus(dom, text) {
-  if (dom.status) dom.status.textContent = text;
-}
-
 function initSendPage() {
   const section = bindRequestSection("send");
   renderRequestSection("send", section);
@@ -450,13 +171,13 @@ function initSendPage() {
 
   section.parseButton.addEventListener("click", () => {
     try {
-      applyParsedPowerShellToRequestState(state.send, state.common, parsePowerShellRequest(section.powershell.value));
+      Object.assign(state.send, parsePowerShellRequest(section.powershell.value));
       state.send.bodyText = formatJsonString(state.send.bodyText);
       saveState();
       renderRequestSection("send", section);
       collapseRequestSection(section);
     } catch (error) {
-      setResponse("send", `閫??憭望?: ${error.message}`);
+      setResponse("send", `解析失敗: ${error.message}`);
       renderRequestSection("send", section);
     }
   });
@@ -563,13 +284,13 @@ function initGalleryPage() {
 
   query.parseButton.addEventListener("click", () => {
     try {
-      applyParsedPowerShellToRequestState(state.query, state.common, parsePowerShellRequest(query.powershell.value));
+      Object.assign(state.query, parsePowerShellRequest(query.powershell.value));
       state.query.bodyText = formatJsonString(state.query.bodyText);
       saveState();
       renderRequestSection("query", query);
       collapseRequestSection(query);
     } catch (error) {
-      setResponse("query", `閫??憭望?: ${error.message}`);
+      setResponse("query", `解析失敗: ${error.message}`);
       renderRequestSection("query", query);
     }
   });
@@ -587,7 +308,7 @@ function initGalleryPage() {
 
   post.parseButton.addEventListener("click", () => {
     try {
-      applyParsedPowerShellToRequestState(state.post, state.common, parsePowerShellRequest(post.powershell.value));
+      Object.assign(state.post, parsePowerShellRequest(post.powershell.value));
       state.post.bodyText = formatJsonString(state.post.bodyText);
       syncGenerationImageIds();
       saveState();
@@ -595,7 +316,7 @@ function initGalleryPage() {
       renderGallery(gallery);
       collapseRequestSection(post);
     } catch (error) {
-      setResponse("post", `閫??憭望?: ${error.message}`);
+      setResponse("post", `解析失敗: ${error.message}`);
       renderRequestSection("post", post);
     }
   });
@@ -646,14 +367,14 @@ function initGalleryPage() {
 function bindParseAction(key, section, afterParse) {
   section.parseButton.addEventListener("click", () => {
     try {
-      applyParsedPowerShellToRequestState(state[key], state.common, parsePowerShellRequest(section.powershell.value));
+      Object.assign(state[key], parsePowerShellRequest(section.powershell.value));
       state[key].bodyText = formatJsonString(state[key].bodyText);
       saveState();
       renderRequestSection(key, section);
       collapseRequestSection(section);
       afterParse();
     } catch (error) {
-      setResponse(key, `閫??憭望?: ${error.message}`);
+      setResponse(key, `解析失敗: ${error.message}`);
       renderRequestSection(key, section);
     }
   });
@@ -672,7 +393,7 @@ function initMetadataPage() {
 
   output.textContent = state.importedMetadata
     ? JSON.stringify(state.importedMetadata, null, 2)
-    : "No metadata loaded";
+    : "尚未載入 metadata。";
 
   fileInput.addEventListener("change", async (event) => {
     const [file] = event.target.files || [];
@@ -719,9 +440,9 @@ function initMetadataPage() {
       payload.params = params;
       state.send.bodyText = JSON.stringify(payload, null, 2);
       saveState();
-      output.textContent = `${JSON.stringify(state.importedMetadata, null, 2)}\n\nApplied metadata to Send Request Body.`;
+      output.textContent = `${JSON.stringify(state.importedMetadata, null, 2)}\n\n已套用到 Send Request Body。`;
     } catch (error) {
-      output.textContent = `Apply failed: ${error.message}`;
+      output.textContent = `套用失敗: ${error.message}`;
     }
   });
 }
@@ -814,12 +535,12 @@ function bindPresetControls(key, section) {
     if (idx !== -1) {
       state.savedSettings[key][idx].request = extractRequestForPreset(key);
       saveState();
-      alert("Preset updated.");
+      alert("設定已更新並儲存");
     }
   });
 
   section.presetSaveAs.addEventListener("click", () => {
-    const name = prompt("Preset name");
+    const name = prompt("請輸入新設定名稱：");
     if (!name) return;
     const newPreset = {
       id: generateId(),
@@ -830,12 +551,12 @@ function bindPresetControls(key, section) {
     state[key].presetId = newPreset.id;
     saveState();
     renderPresetOptions(key, section);
-    alert("Preset saved.");
+    alert("另存新設定成功");
   });
 
   section.presetDelete.addEventListener("click", () => {
     if (!state[key].presetId) return;
-    if (!confirm("蝣箏?閬?斗迨閮剖???")) return;
+    if (!confirm("確定要刪除此設定嗎？")) return;
     state.savedSettings[key] = state.savedSettings[key].filter(p => p.id !== state[key].presetId);
     state[key].presetId = null;
     saveState();
@@ -859,7 +580,7 @@ function renderPresetOptions(key, section) {
   if (!section.presetSelect) return;
   const presets = state.savedSettings[key] || [];
   
-  const options = [`<option value="">-- ?芸摮??阮 --</option>`];
+  const options = [`<option value="">-- 未儲存的草稿 --</option>`];
   presets.forEach(p => {
     options.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`);
   });
@@ -905,7 +626,7 @@ function initializeRequestSectionVisibility(key, section) {
 async function submitRequestSection(key, section, updateGallery) {
   try {
     const request = buildFetchRequest(key);
-    setResponse(key, "?銝?..");
+    setResponse(key, "送出中...");
     renderRequestSection(key, section);
     section.responseFold.open = false;
 
@@ -922,32 +643,16 @@ async function submitRequestSection(key, section, updateGallery) {
     }
     return response.status;
   } catch (error) {
-    setResponse(key, formatRequestError(error, globalThis.location?.href || ""));
+    setResponse(key, `Request 失敗: ${error.message}`);
     renderRequestSection(key, section);
     section.responseFold.open = false;
     return null;
   }
 }
 
-function formatRequestError(error, pageUrl = "") {
-  const message = error?.message || String(error);
-  const hints = [];
-  const isLocalPage = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//i.test(pageUrl);
-
-  if (/failed to fetch/i.test(message) && isLocalPage) {
-    hints.push("This page is localhost / 127.0.0.1. TensorArt may block this origin; use the deployed GitHub Pages URL.");
-  }
-
-  if (/failed to fetch/i.test(message)) {
-    hints.push("If you are already on GitHub Pages, copy a fresh TensorArt request as PowerShell and paste it into the shared API signature section.");
-  }
-
-  return [`Request failed: ${message}`, ...hints].join("\n");
-}
-
 function buildFetchRequest(key) {
   const request = state[key];
-  const headers = buildEffectiveHeaders(request.headers, state.common.headers);
+  const headers = sanitizeHeaders(request.headers);
   const options = {
     method: (request.method || "POST").toUpperCase(),
     headers,
@@ -983,12 +688,12 @@ function renderGallery(dom) {
   dom.selectedCount.forEach(el => { el.textContent = String(state.selectedImageIds.length); });
 
   if (!state.galleryItems.length) {
-    dom.stats.textContent = "No gallery images yet.";
+    dom.stats.textContent = "目前沒有查詢結果。";
     dom.root.innerHTML = "";
     return;
   }
 
-  dom.stats.textContent = `Loaded ${state.galleryItems.length} images. Selected images will be written to post generationImageIds.`;
+  dom.stats.textContent = `共 ${state.galleryItems.length} 張圖片，可勾選後同步到 post 的 generationImageIds。`;
   dom.root.innerHTML = state.galleryItems.map((entry, index) => {
     const checked = state.selectedImageIds.includes(entry.generationImageId) ? "checked" : "";
     return `
@@ -1001,7 +706,7 @@ function renderGallery(dom) {
           </div>
           <div class="gallery-selection">
             <input type="checkbox" id="pick-${index}" data-image-id="${escapeHtml(entry.generationImageId)}" ${checked}>
-            <label for="pick-${index}">? generationImageIds</label>
+            <label for="pick-${index}">加入 generationImageIds</label>
           </div>
           <div class="gallery-meta">
             <span class="pill">Seed ${escapeHtml(String(entry.metadata.seed || "-"))}</span>
@@ -1009,7 +714,7 @@ function renderGallery(dom) {
           </div>
           <pre>${escapeHtml(JSON.stringify(entry.metadata, null, 2))}</pre>
           <div class="gallery-actions">
-            <button type="button" data-action="open-original" data-index="${index}">????</button>
+            <button type="button" data-action="open-original" data-index="${index}">開啟原圖</button>
           </div>
         </div>
       </article>
@@ -1053,11 +758,11 @@ function convertBlobToJpeg(blob) {
       ctx.drawImage(img, 0, 0);
       canvas.toBlob((jpegBlob) => {
         if (jpegBlob) resolve(jpegBlob);
-        else reject(new Error("Cannot convert to JPG"));
+        else reject(new Error("無法轉換為 JPG"));
       }, "image/jpeg", 0.95);
       URL.revokeObjectURL(img.src);
     };
-    img.onerror = () => reject(new Error("Image load failed"));
+    img.onerror = () => reject(new Error("圖片載入失敗，無法轉換"));
     img.src = URL.createObjectURL(blob);
   });
 }
@@ -1066,10 +771,10 @@ function extractBlobFromImageElement(imgElement, targetMimeType) {
   return new Promise((resolve, reject) => {
     try {
       if (!imgElement || !imgElement.src) {
-        reject(new Error("Image element is missing a source"));
+        reject(new Error("圖片尚未載入或無法存取"));
         return;
       }
-      // 撱箇??啁? Image ?拐辣銝西身摰?crossorigin嚗????gallery 銝剔??? img
+      // 建立新的 Image 物件並設定 crossorigin，避免汙染 gallery 中的原始 img
       const corsImg = new Image();
       corsImg.crossOrigin = "anonymous";
       corsImg.onload = () => {
@@ -1085,13 +790,13 @@ function extractBlobFromImageElement(imgElement, targetMimeType) {
           ctx.drawImage(corsImg, 0, 0);
           canvas.toBlob((blob) => {
             if (blob) resolve(blob);
-            else reject(new Error("Cannot export canvas image"));
+            else reject(new Error("無法從 Canvas 取得影像資料"));
           }, targetMimeType, 0.95);
         } catch (e) {
           reject(e);
         }
       };
-      corsImg.onerror = () => reject(new Error("Image failed CORS loading"));
+      corsImg.onerror = () => reject(new Error("以 CORS 模式載入圖片失敗"));
       corsImg.src = imgElement.src;
     } catch (e) {
       reject(e);
@@ -1105,7 +810,7 @@ async function handleGalleryAction(action, index, dom) {
 
   const signedExpiry = getSignedUrlExpiry(entry.url);
   if (signedExpiry && new Date() > signedExpiry) {
-    dom.stats.textContent = `Signed image URL expired at ${signedExpiry.toLocaleTimeString("zh-TW", { hour12: false })}. Refresh the query API.`;
+    dom.stats.textContent = `無法下載：圖片連結已在 ${signedExpiry.toLocaleTimeString("zh-TW", { hour12: false })} 過期，請重新查詢一次 API。`;
     return;
   }
 
@@ -1136,16 +841,17 @@ async function handleGalleryAction(action, index, dom) {
       }
     }
     
-    dom.stats.textContent = "甇?敺翰??????隢???..";
+    dom.stats.textContent = "正在從快取轉換圖片，請稍候...";
     
     let blob;
     try {
-      // ?湔敺?Ｖ?撌脩?頛??img 璅惜??銝西?瑼?銝???fetch()
+      // 直接從畫面上已經載入的 img 標籤提取並轉檔，不重新 fetch()
       const imgElement = dom.root.querySelectorAll('.gallery-card img')[index];
       const targetMimeType = action === "download-jpg" ? "image/jpeg" : mimeType;
       blob = await extractBlobFromImageElement(imgElement, targetMimeType);
     } catch (e) {
-      // ???寞?嚗?甈∠??瘙?      dom.stats.textContent = "?⊥??湔敺翰????甇??閰阡??唬?頛???..";
+      // 降級方案：再次發送請求
+      dom.stats.textContent = "無法直接從快取讀取，正嘗試重新下載圖片...";
       blob = await fetchBlobForSave(entry.url, mimeType);
       if (action === "download-jpg" && blob.type !== "image/jpeg" && blob.type !== "image/jpg") {
         blob = await convertBlobToJpeg(blob);
@@ -1160,15 +866,15 @@ async function handleGalleryAction(action, index, dom) {
       triggerDownload(blob, suggestedFileName);
     }
     
-    dom.stats.textContent = `撌脣??摮瑼?${suggestedFileName}`;
+    dom.stats.textContent = `已完成另存新檔：${suggestedFileName}`;
   } catch (error) {
     if (error.name === "AbortError") return;
-    dom.stats.textContent = `?⊥?銝?嚗?{error.message} (撱箄降? Query API ???圈??)`;
+    dom.stats.textContent = `無法下載：${error.message} (建議重新 Query API 取得新連結)`;
   }
 }
 function parsePowerShellRequest(text) {
   if (!text.trim()) {
-    throw new Error("隢?鞎潔? PowerShell ?批捆");
+    throw new Error("請先貼上 PowerShell 內容");
   }
 
   const url = capture(text, /-Uri\s+"([\s\S]*?)"\s*`?\s*-Method/i);
@@ -1206,7 +912,7 @@ function sanitizeHeaders(headers) {
 function capture(text, pattern) {
   const match = text.match(pattern);
   if (!match) {
-    throw new Error(`?曆??啣?閬?雿? ${pattern}`);
+    throw new Error(`找不到必要欄位: ${pattern}`);
   }
   return match[1];
 }
@@ -1326,7 +1032,7 @@ function formatResponse(text) {
 }
 
 function buildResponsePreview(text) {
-  if (!text) return "???汗";
+  if (!text) return "回應預覽";
   const lines = text.split(/\r?\n/);
   const preview = lines.slice(0, 5).join(" ");
   return lines.length > 5 ? `${preview} ...` : preview;
@@ -1341,13 +1047,13 @@ function buildResponseBodyPreview(text) {
 
 function buildSourcePreview(request) {
   if (!request.url.trim()) {
-    return "API not configured";
+    return "API 詳細設定已就緒 / 解析等待中";
   }
 
   const method = (request.method || "POST").toUpperCase();
   const url = request.url.trim();
   if (!url) {
-    return "PowerShell not parsed";
+    return "PowerShell 已輸入";
   }
 
   const preview = `${method} ${url}`;
@@ -1427,7 +1133,7 @@ async function embedMetadataInOriginal(blob, metadata) {
 async function embedMetadataInPng(blob, metadata) {
   const original = new Uint8Array(await blob.arrayBuffer());
   if (!matchesSignature(original, PNG_SIGNATURE)) {
-    throw new Error("瑼?銝?? PNG");
+    throw new Error("檔案不是有效 PNG");
   }
 
   const payload = new TextEncoder().encode(`AITestMetadata\0${JSON.stringify(metadata)}`);
@@ -1461,13 +1167,13 @@ function findPngIendOffset(bytes) {
     if (type === "IEND") return offset;
     offset += 12 + length;
   }
-  throw new Error("?曆???PNG IEND chunk");
+  throw new Error("找不到 PNG IEND chunk");
 }
 
 async function embedMetadataInJpeg(blob, metadata) {
   const original = new Uint8Array(await blob.arrayBuffer());
   if (original[0] !== JPEG_SOI[0] || original[1] !== JPEG_SOI[1]) {
-    throw new Error("瑼?銝?? JPEG");
+    throw new Error("檔案不是有效 JPEG");
   }
 
   const comment = new TextEncoder().encode(`AITestMetadata:${JSON.stringify(metadata)}`);
@@ -1489,7 +1195,7 @@ async function readMetadataFromImage(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (matchesSignature(bytes, PNG_SIGNATURE)) return readMetadataFromPng(bytes);
   if (bytes[0] === JPEG_SOI[0] && bytes[1] === JPEG_SOI[1]) return readMetadataFromJpeg(bytes);
-  throw new Error("?芣??PNG ??JPEG");
+  throw new Error("只支援 PNG 或 JPEG");
 }
 
 function readMetadataFromPng(bytes) {
@@ -1505,7 +1211,7 @@ function readMetadataFromPng(bytes) {
     }
     offset += 12 + length;
   }
-  throw new Error("???扳銝 AITestMetadata");
+  throw new Error("圖片內找不到 AITestMetadata");
 }
 
 function readMetadataFromJpeg(bytes) {
@@ -1526,7 +1232,7 @@ function readMetadataFromJpeg(bytes) {
     }
     offset += 2 + length;
   }
-  throw new Error("???扳銝 AITestMetadata");
+  throw new Error("圖片內找不到 AITestMetadata");
 }
 
 function matchesSignature(bytes, signature) {
@@ -1563,17 +1269,17 @@ function classifyImageAccessFailure(url, error) {
   const now = new Date();
 
   if (signedExpiry && now > signedExpiry) {
-    return `Signed image URL expired at ${signedExpiry.toLocaleString("zh-TW", { hour12: false })}.`;
+    return `圖片連結已過期（${signedExpiry.toLocaleString("zh-TW", { hour12: false })}）`;
   }
 
   if (String(error?.message || "").includes("404")) {
     if (signedExpiry) {
-      return `Image URL returned 404. Signed URL may have expired at ${signedExpiry.toLocaleString("zh-TW", { hour12: false })}.`;
+      return `圖片回傳 404，且連結可能已過期（${signedExpiry.toLocaleString("zh-TW", { hour12: false })}）`;
     }
-    return "Image URL returned 404. Refresh the query API.";
+    return "圖片回傳 404，請重新查詢取得新連結";
   }
 
-  return "Image access failed. It may be CORS or an expired signed URL.";
+  return "圖片下載失敗，可能是 CORS 或連結失效";
 }
 
 function getSignedUrlExpiry(url) {
@@ -1634,7 +1340,7 @@ async function fetchBlobForSave(url, mimeTypeHint) {
   }
 
   if (!response.ok) {
-    throw new Error(`銝?憭望?: HTTP ${response.status}`);
+    throw new Error(`下載失敗: HTTP ${response.status}`);
   }
 
   const blob = await response.blob();
