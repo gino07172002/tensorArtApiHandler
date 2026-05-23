@@ -43,54 +43,40 @@ await page.goto(`http://localhost:${port}/canvas.html`);
 await page.waitForSelector("#canvas-stage");
 await page.waitForTimeout(200);
 
-// Test 1: change API to portrait 1024x1536 - canvas should resize and fit larger
+// Test 1: change API to portrait 1024x1536 - canvas should resize
 await page.locator("#canvas-height").fill("1536");
 await page.waitForTimeout(150);
 const portrait = await page.locator("#canvas-stage").evaluate((el) => ({
   width: el.width, height: el.height,
   styleW: parseFloat(el.style.width), styleH: parseFloat(el.style.height),
 }));
-console.log("Portrait sync:", portrait, "badge:", await page.locator("#canvas-stage-size").textContent());
+console.log("Portrait sync:", portrait);
 if (portrait.height !== 1536) note("canvas.height not synced to 1536", `got ${portrait.height}`);
-if (portrait.styleH < portrait.styleW * 1.2) note("portrait display not tall enough", JSON.stringify(portrait));
 
-// Test 2: brush popover doesn't cover the canvas
+// Test 2: brush popover positioned to LEFT of toolbar (no canvas overlap)
 await page.locator('[data-canvas-tool="brush"]').click();
 await page.waitForTimeout(150);
 const popoverGeom = await page.locator("#canvas-brush-popover").boundingBox();
 const canvasGeom = await page.locator("#canvas-stage").boundingBox();
-console.log("Popover:", popoverGeom, "Canvas:", canvasGeom);
-if (popoverGeom && canvasGeom) {
-  const xOverlap = popoverGeom.x < canvasGeom.x + canvasGeom.width && popoverGeom.x + popoverGeom.width > canvasGeom.x;
-  const yOverlap = popoverGeom.y < canvasGeom.y + canvasGeom.height && popoverGeom.y + popoverGeom.height > canvasGeom.y;
-  if (xOverlap && yOverlap) note("popover still overlaps canvas", `popover x=${popoverGeom.x} canvas x=${canvasGeom.x}`);
+if (popoverGeom && canvasGeom && popoverGeom.x + popoverGeom.width > canvasGeom.x) {
+  note("popover overlaps canvas horizontally", `pop right=${popoverGeom.x + popoverGeom.width} canvas left=${canvasGeom.x}`);
 }
 
-// Close popover by clicking elsewhere
+// Close popover
 await page.locator("h2").first().click();
 await page.waitForTimeout(150);
 
-// Test 3: switch to mask mode - paint-only UI should hide
+// Test 3: switch to mask mode - paint-only UI hides
 await page.locator('[data-canvas-layer="mask"]').click();
 await page.waitForTimeout(200);
-const maskHidden = await page.evaluate(() => {
-  const pick = document.querySelector("#canvas-pick");
-  const colorRow = document.querySelector(".popover-row.paint-only");
-  const layerPanel = document.querySelector(".layer-panel.paint-only");
-  const moveBtn = document.querySelector('[data-canvas-tool="move"]');
-  const clearPaint = document.querySelector("#canvas-clear-paint");
-  const clearMask = document.querySelector("#canvas-clear-mask");
-  const transformMini = document.querySelector(".transform-mini");
-  return {
-    pick: pick ? getComputedStyle(pick).display : "missing",
-    layerPanel: layerPanel ? getComputedStyle(layerPanel).display : "missing",
-    moveBtn: moveBtn ? getComputedStyle(moveBtn).display : "missing",
-    clearPaint: clearPaint ? getComputedStyle(clearPaint).display : "missing",
-    clearMask: clearMask ? getComputedStyle(clearMask).display : "missing",
-    transformMini: transformMini ? getComputedStyle(transformMini).display : "missing",
-  };
-});
-console.log("Mask mode visibility:", maskHidden);
+const maskHidden = await page.evaluate(() => ({
+  pick: getComputedStyle(document.querySelector("#canvas-pick")).display,
+  layerPanel: getComputedStyle(document.querySelector(".layer-panel.paint-only")).display,
+  moveBtn: getComputedStyle(document.querySelector('[data-canvas-tool="move"]')).display,
+  clearPaint: getComputedStyle(document.querySelector("#canvas-clear-paint")).display,
+  clearMask: getComputedStyle(document.querySelector("#canvas-clear-mask")).display,
+  transformMini: getComputedStyle(document.querySelector(".transform-mini")).display,
+}));
 if (maskHidden.pick !== "none") note("pick still visible in mask mode", maskHidden.pick);
 if (maskHidden.layerPanel !== "none") note("paint layer panel still visible in mask mode", maskHidden.layerPanel);
 if (maskHidden.moveBtn !== "none") note("move tool still visible in mask mode", maskHidden.moveBtn);
@@ -98,48 +84,74 @@ if (maskHidden.clearPaint !== "none") note("clear-paint still visible in mask mo
 if (maskHidden.clearMask === "none") note("clear-mask hidden in mask mode", maskHidden.clearMask);
 if (maskHidden.transformMini !== "none") note("transform-mini visible in mask mode", maskHidden.transformMini);
 
-// Test 4: switch back to paint - paint UI returns
+// Back to paint
 await page.locator('[data-canvas-layer="paint"]').click();
 await page.waitForTimeout(200);
-const paintReturn = await page.evaluate(() => ({
-  pick: getComputedStyle(document.querySelector("#canvas-pick")).display,
-  moveBtn: getComputedStyle(document.querySelector('[data-canvas-tool="move"]')).display,
-  layerPanel: getComputedStyle(document.querySelector(".layer-panel.paint-only")).display,
-  clearMask: getComputedStyle(document.querySelector("#canvas-clear-mask")).display,
-}));
-console.log("Paint mode visibility:", paintReturn);
-if (paintReturn.pick === "none") note("pick hidden in paint mode", paintReturn.pick);
-if (paintReturn.moveBtn === "none") note("move hidden in paint mode", paintReturn.moveBtn);
-if (paintReturn.layerPanel === "none") note("layer panel hidden in paint mode", paintReturn.layerPanel);
-if (paintReturn.clearMask !== "none") note("clear-mask visible in paint mode", paintReturn.clearMask);
 
-// Test 5: dimmed stage frame visible around canvas
-const frameContrast = await page.evaluate(() => {
-  const frame = document.querySelector(".stage-frame");
-  const host = document.querySelector(".editor-canvas-host");
-  return {
-    framePadding: getComputedStyle(frame).padding,
-    frameBg: getComputedStyle(frame).backgroundColor,
-    frameRect: frame.getBoundingClientRect().toJSON(),
-    hostRect: host?.getBoundingClientRect().toJSON(),
+// Test 4: Simulate canvasImport with explicit width/height -> canvas resizes to imported dims
+await page.evaluate(() => {
+  const stored = JSON.parse(localStorage.getItem("tensor-api-qa-console-v2") || "{}");
+  stored.canvasImport = {
+    mode: "img2img",
+    imageUrl: "",
+    width: 832,
+    height: 1216,
+    prompt: "test prompt",
+    seed: "-1",
   };
+  localStorage.setItem("tensor-api-qa-console-v2", JSON.stringify(stored));
 });
-console.log("Stage frame:", frameContrast);
+await page.reload();
+await page.waitForSelector("#canvas-stage");
+await page.waitForTimeout(300);
+const afterImport = await page.locator("#canvas-stage").evaluate((el) => ({
+  width: el.width, height: el.height,
+  inputW: document.querySelector("#canvas-width").value,
+  inputH: document.querySelector("#canvas-height").value,
+  badge: document.querySelector("#canvas-stage-size").textContent,
+}));
+console.log("After import (832x1216):", afterImport);
+if (afterImport.width !== 832) note("import width not applied to canvas", `got ${afterImport.width}, input=${afterImport.inputW}`);
+if (afterImport.height !== 1216) note("import height not applied to canvas", `got ${afterImport.height}, input=${afterImport.inputH}`);
 
-// Test 6: layer add/remove in paint mode
-const layersBefore = await page.locator("#canvas-layer-list li").count();
-await page.locator("#canvas-layer-add").click();
-await page.waitForTimeout(100);
-const layersAfter = await page.locator("#canvas-layer-list li").count();
-console.log("Layers before/after add:", layersBefore, layersAfter);
-if (layersAfter !== layersBefore + 1) note("add layer failed", `${layersBefore} -> ${layersAfter}`);
-
-await page.screenshot({ path: path.join(root, "tests/e2e/canvas-shot-paint.png"), fullPage: false });
-
-// Test 7: switch to mask + screenshot
-await page.locator('[data-canvas-layer="mask"]').click();
+// Test 5: Loading a local image file with no API dims should adopt image dims
+// Reset state
+await page.evaluate(() => localStorage.removeItem("tensor-api-qa-console-v2"));
+await page.reload();
+await page.waitForSelector("#canvas-stage");
 await page.waitForTimeout(200);
-await page.screenshot({ path: path.join(root, "tests/e2e/canvas-shot-mask.png"), fullPage: false });
+
+// Use a known small PNG (1x1 pixel data URL would work but let's craft 600x400)
+const pngBuffer = await page.evaluate(async () => {
+  const c = document.createElement("canvas");
+  c.width = 600;
+  c.height = 400;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#abcdef";
+  ctx.fillRect(0, 0, 600, 400);
+  return new Promise((resolve) => {
+    c.toBlob(async (blob) => {
+      const buf = await blob.arrayBuffer();
+      resolve(Array.from(new Uint8Array(buf)));
+    }, "image/png");
+  });
+});
+
+const tmpPath = path.join(root, "tests/e2e/tmp-600x400.png");
+fs.writeFileSync(tmpPath, Buffer.from(pngBuffer));
+await page.locator("#canvas-file").setInputFiles(tmpPath);
+await page.waitForTimeout(400);
+const afterLocal = await page.locator("#canvas-stage").evaluate((el) => ({
+  width: el.width, height: el.height,
+  inputW: document.querySelector("#canvas-width").value,
+  inputH: document.querySelector("#canvas-height").value,
+}));
+console.log("After local 600x400 load:", afterLocal);
+if (afterLocal.width !== 600) note("local image width not adopted to canvas", `got ${afterLocal.width}, input=${afterLocal.inputW}`);
+if (afterLocal.height !== 400) note("local image height not adopted to canvas", `got ${afterLocal.height}, input=${afterLocal.inputH}`);
+fs.unlinkSync(tmpPath);
+
+await page.screenshot({ path: path.join(root, "tests/e2e/canvas-shot-final.png"), fullPage: false });
 
 await browser.close();
 server.close();

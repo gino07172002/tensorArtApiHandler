@@ -1739,24 +1739,33 @@ function loadCanvasBaseImage(event, editor, dom) {
       editor.sourceImageUrl = "";
       editor.imageId = "";
       editor.taskId = "";
-      const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
-      editor.transform = {
-        x: Math.round(editor.canvas.width / 2),
-        y: Math.round(editor.canvas.height / 2),
-        scale: Number.isFinite(fitScale) ? fitScale : 1,
-        rotation: 0,
-      };
-      dom.x.value = String(editor.transform.x);
-      dom.y.value = String(editor.transform.y);
-      dom.scale.value = String(Math.round(editor.transform.scale * 100));
-      dom.rotation.value = "0";
+      adoptCanvasImageDimensions(editor, dom, image, { matchSize: true });
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
-      dom.stats.textContent = `已載入本地圖片：${file.name}`;
+      dom.stats.textContent = `已載入本地圖片：${file.name}（畫布同步為 ${image.width}×${image.height}）`;
     };
     image.src = String(reader.result || "");
   };
   reader.readAsDataURL(file);
+}
+
+function adoptCanvasImageDimensions(editor, dom, image, { matchSize }) {
+  if (matchSize && image.width && image.height) {
+    dom.width.value = String(image.width);
+    dom.height.value = String(image.height);
+    resizeCanvasEditor(editor, dom);
+  }
+  const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
+  editor.transform = {
+    x: Math.round(editor.canvas.width / 2),
+    y: Math.round(editor.canvas.height / 2),
+    scale: Number.isFinite(fitScale) ? fitScale : 1,
+    rotation: 0,
+  };
+  dom.x.value = String(editor.transform.x);
+  dom.y.value = String(editor.transform.y);
+  dom.scale.value = String(Math.round(editor.transform.scale * 100));
+  dom.rotation.value = "0";
 }
 
 function applyCanvasImport(editor, dom) {
@@ -1774,6 +1783,11 @@ function applyCanvasImport(editor, dom) {
   if (incoming.denoisingStrength) dom.denoisingStrength.value = String(incoming.denoisingStrength);
   dom.modelId.value = incoming.modelId || "";
   dom.modelFileId.value = incoming.modelFileId || "";
+
+  editor.importHadDims = Boolean(incoming.width && incoming.height);
+  if (editor.importHadDims) {
+    resizeCanvasEditor(editor, dom);
+  }
 
   editor.imageDataUrl = incoming.imageUrl || "";
   editor.sourceImageUrl = incoming.imageUrl || "";
@@ -1810,17 +1824,7 @@ function loadCanvasImageUrlWithFallback(url, editor, dom) {
 
     image.onload = () => {
       editor.baseImage = image;
-      const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
-      editor.transform = {
-        x: Math.round(editor.canvas.width / 2),
-        y: Math.round(editor.canvas.height / 2),
-        scale: Number.isFinite(fitScale) ? fitScale : 1,
-        rotation: 0,
-      };
-      dom.x.value = String(editor.transform.x);
-      dom.y.value = String(editor.transform.y);
-      dom.scale.value = String(Math.round(editor.transform.scale * 100));
-      dom.rotation.value = "0";
+      adoptCanvasImageDimensions(editor, dom, image, { matchSize: !editor.importHadDims });
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
       if (!attempt.crossOrigin) {
@@ -1851,17 +1855,7 @@ function loadCanvasImageUrl(url, editor, dom) {
   image.crossOrigin = "anonymous";
   image.onload = () => {
     editor.baseImage = image;
-    const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
-    editor.transform = {
-      x: Math.round(editor.canvas.width / 2),
-      y: Math.round(editor.canvas.height / 2),
-      scale: Number.isFinite(fitScale) ? fitScale : 1,
-      rotation: 0,
-    };
-    dom.x.value = String(editor.transform.x);
-    dom.y.value = String(editor.transform.y);
-    dom.scale.value = String(Math.round(editor.transform.scale * 100));
-    dom.rotation.value = "0";
+    adoptCanvasImageDimensions(editor, dom, image, { matchSize: !editor.importHadDims });
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
   };
