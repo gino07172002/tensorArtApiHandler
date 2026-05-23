@@ -84,6 +84,28 @@ assert.equal(parsedRequest.method, "POST");
 assert.deepEqual(plain(parsedRequest.headers), { accept: "application/json" });
 assert.equal(parsedRequest.bodyText, '{"size":20}');
 
+const parsedLooseRequest = parsePowerShellRequest(`
+Invoke-WebRequest -UseBasicParsing \`
+  -Uri 'https://api.tensor.art/works/v1/works/task_by_image' \`
+  -WebSession $session \`
+  -Headers @{
+    "authorization"="Bearer token"
+    "origin"="https://tensor.art"
+    "x-request-sign"="sig-2"
+  } \`
+  -Method POST \`
+  -ContentType "application/json" \`
+  -Body '{"params":{"prompt":"ok"}}'
+`);
+
+assert.equal(parsedLooseRequest.url, "https://api.tensor.art/works/v1/works/task_by_image");
+assert.equal(parsedLooseRequest.method, "POST");
+assert.deepEqual(plain(parsedLooseRequest.headers), {
+  authorization: "Bearer token",
+  "x-request-sign": "sig-2",
+});
+assert.equal(parsedLooseRequest.bodyText, '{"params":{"prompt":"ok"}}');
+
 const sourceBody = JSON.stringify({
   params: {
     prompt: "old prompt",

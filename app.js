@@ -1171,9 +1171,9 @@ function parsePowerShellRequest(text) {
     throw new Error("請先貼上 PowerShell 內容");
   }
 
-  const url = capture(text, /-Uri\s+"([\s\S]*?)"\s*`?\s*-Method/i);
-  const method = capture(text, /-Method\s+"([^"]+)"/i);
-  const headersBlock = captureOptional(text, /-Headers\s+@\{([\s\S]*?)\}\s*`?\s*-ContentType/i);
+  const url = capturePowerShellParameter(text, "Uri");
+  const method = capturePowerShellParameter(text, "Method");
+  const headersBlock = captureOptional(text, /-Headers\s+@\{([\s\S]*?)\}/i);
   const bodyLiteral = extractPowerShellBodyLiteral(text);
 
   return {
@@ -1201,6 +1201,30 @@ function sanitizeHeaders(headers) {
   return Object.fromEntries(
     Object.entries(headers).filter(([key]) => !FORBIDDEN_HEADERS.has(key.toLowerCase())),
   );
+}
+
+function capturePowerShellParameter(text, name) {
+  const pattern = new RegExp(`-${name}\\b`, "i");
+  const match = pattern.exec(text);
+  if (!match) {
+    throw new Error(`找不到必要欄位: -${name}`);
+  }
+
+  const segment = text.slice(match.index + match[0].length).trimStart();
+  if (segment[0] === "\"" || segment[0] === "'") {
+    const literal = segment[0] === "\""
+      ? readDoubleQuotedPowerShellString(segment, 0)
+      : readSingleQuotedPowerShellString(segment, 0);
+    if (literal) {
+      return decodePowerShellQuotedString(literal.value, literal.quote);
+    }
+  }
+
+  const unquoted = segment.match(/^([^`\s]+)/);
+  if (!unquoted) {
+    throw new Error(`找不到必要欄位: -${name}`);
+  }
+  return decodePowerShellString(unquoted[1]);
 }
 
 function capture(text, pattern) {
