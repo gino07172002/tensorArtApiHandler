@@ -1657,9 +1657,21 @@ async function sendCanvasRequest(editor, dom) {
       if (!payload.params) payload.params = {};
       if (!payload.params.inpaint) payload.params.inpaint = {};
       payload.params.inpaint.maskImage = uploadedMaskUrl;
+
+      if (!payload.imageUrl && (editor.sourceImageUrl || draft.body.imageUrl)) {
+        payload.imageUrl = editor.sourceImageUrl || draft.body.imageUrl;
+      }
+      if (!payload.imageId && (editor.imageId || draft.body.imageId)) {
+        payload.imageId = editor.imageId || draft.body.imageId;
+      }
+      if (payload.params && Array.isArray(payload.params.images) && payload.params.images.length === 0) {
+        const src = editor.sourceImageUrl || draft.body.imageUrl;
+        if (src) payload.params.images = [src];
+      }
+
       bodyText = JSON.stringify(payload, null, 2);
       dom.body.value = bodyText;
-      dom.stats.textContent = "Mask 上傳完成，送出 inpaint 請求...";
+      dom.stats.textContent = `Mask 上傳完成: ${uploadedMaskUrl.substring(0, 60)}... 送出 inpaint...`;
     }
 
     state.canvasRequest = {
@@ -1672,15 +1684,22 @@ async function sendCanvasRequest(editor, dom) {
     };
     saveState();
 
+    const sentBody = JSON.stringify(payload);
     const response = await fetch(state.canvasRequest.url || draft.url, {
       method: state.canvasRequest.method,
       headers,
       mode: "cors",
       credentials: "include",
-      body: JSON.stringify(payload),
+      body: sentBody,
     });
     const text = await response.text();
-    dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}`;
+    const summary = {
+      imageUrl: payload.imageUrl,
+      imageId: payload.imageId,
+      "params.images[0]": payload.params?.images?.[0],
+      "params.inpaint.maskImage": payload.params?.inpaint?.maskImage,
+    };
+    dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}\n\n--- 送出的 URL 欄位 ---\n${JSON.stringify(summary, null, 2)}`;
     dom.stats.textContent = `已送出 (HTTP ${response.status})`;
   } catch (error) {
     dom.response.textContent = `Request 失敗: ${error.message}\n\nCORS 提示：\n- Canvas Send 只使用 Canvas 自己解析出的 request，不會讀取或覆蓋 API 1\n- 若瀏覽器仍擋 api.tensor.art，請確認 CORS/OPTIONS preflight 是否已放行`;
