@@ -1464,12 +1464,67 @@ function applyCanvasImport(editor, dom) {
   editor.schedule = incoming.schedule || editor.schedule;
 
   if (incoming.imageUrl) {
-    loadCanvasImageUrl(incoming.imageUrl, editor, dom);
+    loadCanvasImageUrlWithFallback(incoming.imageUrl, editor, dom);
   }
 
   dom.stats.textContent = incoming.mode === "inpaint"
     ? "已從 Query Results 帶入 Inpaint。"
     : "已從 Query Results 帶入 Img2Img。";
+}
+
+function loadCanvasImageUrlWithFallback(url, editor, dom) {
+  const attempts = createCanvasImageLoadAttempts(url);
+  let index = 0;
+
+  const tryLoad = () => {
+    const attempt = attempts[index];
+    if (!attempt) {
+      dom.stats.textContent = "Image could not be loaded. The API body will keep the original image URL.";
+      updateCanvasBodyPreview(editor, dom);
+      return;
+    }
+
+    const image = new Image();
+    if (attempt.crossOrigin) {
+      image.crossOrigin = attempt.crossOrigin;
+    }
+
+    image.onload = () => {
+      editor.baseImage = image;
+      const fitScale = Math.min(editor.canvas.width / image.width, editor.canvas.height / image.height) * 0.9;
+      editor.transform = {
+        x: Math.round(editor.canvas.width / 2),
+        y: Math.round(editor.canvas.height / 2),
+        scale: Number.isFinite(fitScale) ? fitScale : 1,
+        rotation: 0,
+      };
+      dom.x.value = String(editor.transform.x);
+      dom.y.value = String(editor.transform.y);
+      dom.scale.value = String(Math.round(editor.transform.scale * 100));
+      dom.rotation.value = "0";
+      renderCanvasEditor(editor);
+      updateCanvasBodyPreview(editor, dom);
+      if (!attempt.crossOrigin) {
+        dom.stats.textContent = "Image loaded for editing preview. Export will keep the original image URL because CORS is blocked.";
+      }
+    };
+
+    image.onerror = () => {
+      index += 1;
+      tryLoad();
+    };
+
+    image.src = attempt.url;
+  };
+
+  tryLoad();
+}
+
+function createCanvasImageLoadAttempts(url) {
+  return [
+    { url, crossOrigin: "anonymous" },
+    { url, crossOrigin: "" },
+  ];
 }
 
 function loadCanvasImageUrl(url, editor, dom) {

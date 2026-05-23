@@ -28,6 +28,7 @@ vm.runInContext(`${source}
 globalThis.__testExports = {
   applyGenerationMetadataToBody,
   buildCanvasEditorRequestDraft,
+  createCanvasImageLoadAttempts,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState: () => state,
@@ -40,6 +41,7 @@ globalThis.__testExports = {
 const {
   applyGenerationMetadataToBody,
   buildCanvasEditorRequestDraft,
+  createCanvasImageLoadAttempts,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   getState,
@@ -184,6 +186,11 @@ assert.equal(canvasImport.prompt, metadata.prompt);
 assert.equal(canvasImport.negativePrompt, metadata.negativePrompt);
 assert.equal(canvasImport.modelId, String(metadata.modelId));
 assert.equal(canvasImport.modelFileId, String(metadata.modelFileId));
+
+assert.deepEqual(plain(createCanvasImageLoadAttempts("https://image.tensorartassets.com/example.png")), [
+  { url: "https://image.tensorartassets.com/example.png", crossOrigin: "anonymous" },
+  { url: "https://image.tensorartassets.com/example.png", crossOrigin: "" },
+]);
 
 const canvasBase = {
   prompt: "portrait study",
