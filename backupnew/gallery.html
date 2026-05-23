@@ -31,6 +31,33 @@
       <a class="page-link" href="./metadata.html">Metadata</a>
     </nav>
 
+    <section class="panel signature-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">TensorArt Signature</p>
+          <h2>共用 API 簽章</h2>
+        </div>
+        <p id="common-summary" class="meta-strip">Shared TensorArt signature headers: not set</p>
+      </div>
+      <label class="field">
+        <span>貼任一個刷新 reCAPTCHA 後可用的 TensorArt PowerShell request</span>
+        <textarea id="common-powershell" rows="5" placeholder="貼 Send / Query / Post 任一個 Copy as PowerShell；只會保留必要的 x-request-* 簽章 headers"></textarea>
+      </label>
+      <div class="button-row">
+        <button type="button" id="common-parse" class="primary-button">更新共用簽章</button>
+        <span id="common-status" class="inline-status"></span>
+      </div>
+      <details class="editor-fold">
+        <summary>檢視目前保留的必要 headers</summary>
+        <div class="fold-body">
+          <label class="field">
+            <span>只保存 x-request-* / x-echoing-env，不保存 Cookie 或 Authorization</span>
+            <textarea id="common-headers" rows="8"></textarea>
+          </label>
+        </div>
+      </details>
+    </section>
+
     <main class="stack-layout">
       <section class="panel">
         <div class="panel-header">
@@ -48,7 +75,7 @@
           </div>
         </div>
 
-        <label class="field" style="margin-bottom: 1rem;">
+        <label class="field legacy-powershell-field" style="margin-bottom: 1rem;">
           <span>PowerShell 內容 (貼上後點擊解析)</span>
           <textarea id="query-powershell" rows="5" placeholder="貼上 Query API 的 PowerShell"></textarea>
           <div class="button-row" style="margin-top: 0.5rem; justify-content: flex-start;">
@@ -129,7 +156,7 @@
           </div>
         </div>
 
-        <label class="field" style="margin-bottom: 1rem;">
+        <label class="field legacy-powershell-field" style="margin-bottom: 1rem;">
           <span>PowerShell 內容 (貼上後點擊解析)</span>
           <textarea id="post-powershell" rows="5" placeholder="貼上 Post API 的 PowerShell"></textarea>
           <div class="button-row" style="margin-top: 0.5rem; justify-content: flex-start;">

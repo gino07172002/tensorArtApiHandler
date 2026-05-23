@@ -112,6 +112,16 @@ pre {
   background: rgba(255, 243, 223, 0.92);
 }
 
+.signature-panel {
+  margin-top: 20px;
+}
+
+.inline-status {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .single-column,
 .stack-layout {
   display: grid;
