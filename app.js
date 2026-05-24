@@ -507,14 +507,33 @@ function initCanvasPage() {
   bindCanvasPresignSection(presign);
 
   const editor = createCanvasEditor(dom.canvas, dom);
+  hydrateCanvasStoredRequest(editor, dom);
   renderCanvasEditor(editor);
   applyCanvasImport(editor, dom);
-  updateCanvasBodyPreview(editor, dom, { force: true });
+  if (state.canvasImport || !state.canvasRequest.bodyText.trim()) {
+    updateCanvasBodyPreview(editor, dom, { force: true });
+  }
 
   dom.file.addEventListener("change", (event) => loadCanvasBaseImage(event, editor, dom));
   dom.mode.addEventListener("change", () => updateCanvasBodyPreview(editor, dom));
   dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom, { force: true }));
   dom.inpaintParse?.addEventListener("click", () => parseCanvasPowerShellRequest(editor, dom));
+  dom.inpaintPowerShell?.addEventListener("input", () => {
+    state.canvasRequest = {
+      ...blankRequestState(),
+      ...state.canvasRequest,
+      powershell: dom.inpaintPowerShell.value,
+    };
+    saveState();
+  });
+  dom.body.addEventListener("input", () => {
+    state.canvasRequest = {
+      ...blankRequestState(),
+      ...state.canvasRequest,
+      bodyText: dom.body.value,
+    };
+    saveState();
+  });
   dom.send.addEventListener("click", () => sendCanvasRequest(editor, dom));
   dom.clearMask.addEventListener("click", () => {
     editor.maskCtx.clearRect(0, 0, editor.maskCanvas.width, editor.maskCanvas.height);
@@ -706,6 +725,30 @@ function bindCanvasPresignSection(section) {
     saveState();
     renderRequestSection("presign", section);
   });
+}
+
+function hydrateCanvasStoredRequest(editor, dom) {
+  const request = { ...blankRequestState(), ...(state.canvasRequest || {}) };
+
+  if (dom.inpaintPowerShell) {
+    dom.inpaintPowerShell.value = request.powershell || "";
+  }
+  if (dom.inpaintHeaders) {
+    dom.inpaintHeaders.value = JSON.stringify(sanitizeHeaders(request.headers || {}), null, 2);
+  }
+  if (dom.inpaintSourceSummary) {
+    dom.inpaintSourceSummary.textContent = buildSourcePreview(request);
+  }
+  if (!request.bodyText.trim()) {
+    return;
+  }
+
+  try {
+    applyParsedCanvasRequestToForm(request, editor, dom);
+    dom.body.value = request.bodyText;
+  } catch {
+    dom.body.value = request.bodyText;
+  }
 }
 
 function bindRequestSection(prefix) {
@@ -2568,7 +2611,16 @@ function updateCanvasBodyPreview(editor, dom, { force = false } = {}) {
   // textbox alone so the user can hand-edit it for experiments.
   if (!force) return;
   const draft = buildCanvasEditorDraftFromDom(editor, dom);
-  dom.body.value = JSON.stringify(draft.body, null, 2);
+  const bodyText = JSON.stringify(draft.body, null, 2);
+  dom.body.value = bodyText;
+  state.canvasRequest = {
+    ...blankRequestState(),
+    ...state.canvasRequest,
+    url: state.canvasRequest.url || draft.url,
+    method: state.canvasRequest.method || draft.method,
+    bodyText,
+  };
+  saveState();
 }
 
 function readCanvasColorAtPoint(ctx, point) {

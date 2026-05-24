@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test tests/app-helpers.test.mjs",
-    "test:e2e": "node tests/e2e/canvas-smoke.mjs && node tests/e2e/presign-response.mjs"
+    "test:e2e": "node tests/e2e/canvas-smoke.mjs && node tests/e2e/presign-response.mjs && node tests/e2e/canvas-storage.mjs"
   },
   "keywords": [],
   "author": "",
