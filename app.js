@@ -889,13 +889,13 @@ async function submitRequestSection(key, section, updateGallery) {
     const request = buildFetchRequest(key);
     setResponse(key, "送出中...");
     renderRequestSection(key, section);
-    section.responseFold.open = false;
+    section.responseFold.open = true;
 
     const response = await fetch(request.url, request.options);
     const text = await response.text();
     setResponse(key, `HTTP ${response.status}\n${formatResponse(text)}`);
     renderRequestSection(key, section);
-    section.responseFold.open = false;
+    section.responseFold.open = true;
 
     if (updateGallery) {
       const json = JSON.parse(text);
@@ -906,7 +906,7 @@ async function submitRequestSection(key, section, updateGallery) {
   } catch (error) {
     setResponse(key, `Request 失敗: ${error.message}`);
     renderRequestSection(key, section);
-    section.responseFold.open = false;
+    section.responseFold.open = true;
     return null;
   }
 }
