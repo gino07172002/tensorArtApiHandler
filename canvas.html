@@ -32,6 +32,62 @@
       <a class="page-link is-active" href="./canvas.html">Canvas Editor</a>
     </nav>
 
+    <section class="panel presign-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Upload Probe</p>
+          <h2>pre_sign Experiment</h2>
+          <p class="section-copy">Paste the Tensor pre_sign PowerShell here to test whether the parsed headers and JSON body can obtain a mask upload URL.</p>
+        </div>
+        <button type="button" id="presign-request" class="primary-button">Send pre_sign</button>
+      </div>
+
+      <label class="field">
+        <span>PowerShell Source</span>
+        <textarea id="presign-powershell" rows="5" spellcheck="false" placeholder="Paste Invoke-WebRequest ... /community-web/v1/cloudflare/upload/pre_sign"></textarea>
+      </label>
+      <div class="button-row compact-left">
+        <button type="button" id="presign-parse" class="ghost-button">Parse PowerShell</button>
+      </div>
+
+      <details id="presign-source-fold" class="editor-fold request-source-fold">
+        <summary id="presign-source-summary">API details waiting for parse</summary>
+        <div class="fold-body">
+          <div class="inline-grid">
+            <label class="field">
+              <span>URL</span>
+              <input id="presign-url" type="text">
+            </label>
+            <label class="field">
+              <span>Method</span>
+              <input id="presign-method" type="text">
+            </label>
+          </div>
+          <label class="field">
+            <span>Headers</span>
+            <textarea id="presign-headers" rows="7" spellcheck="false"></textarea>
+          </label>
+        </div>
+      </details>
+
+      <div class="presign-grid">
+        <label class="field">
+          <span>Send Body</span>
+          <textarea id="presign-body" rows="8" spellcheck="false"></textarea>
+        </label>
+        <label class="field">
+          <span>Response</span>
+          <details id="presign-response-fold" class="response-fold">
+            <summary id="presign-response-summary">Response preview</summary>
+            <pre id="presign-response" class="response-box"></pre>
+          </details>
+        </label>
+      </div>
+      <div class="button-row compact-left">
+        <button type="button" id="presign-format" class="ghost-button">Format Body</button>
+      </div>
+    </section>
+
     <main class="canvas-workbench">
       <aside class="canvas-inspector panel">
         <div>

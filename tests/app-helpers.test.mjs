@@ -35,6 +35,7 @@ globalThis.__testExports = {
   storeCanvasParsedRequest,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
+  buildSnapshotData,
   getState: () => state,
   parsePowerShellRequest,
   renderGallery,
@@ -52,6 +53,7 @@ const {
   storeCanvasParsedRequest,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
+  buildSnapshotData,
   getState,
   parsePowerShellRequest,
   renderGallery,
@@ -107,6 +109,65 @@ assert.deepEqual(plain(parsedLooseRequest.headers), {
   "x-request-sign": "sig-2",
 });
 assert.equal(parsedLooseRequest.bodyText, '{"params":{"prompt":"ok"}}');
+
+assert.deepEqual(plain(getState().presign), {
+  powershell: "",
+  url: "",
+  method: "POST",
+  headers: {},
+  bodyText: "",
+  responseText: "",
+  clearOnSubmit: false,
+  presetId: null,
+});
+
+const presignSnapshot = buildSnapshotData({
+  ...getState(),
+  presign: {
+    powershell: "Invoke-WebRequest -Uri test",
+    url: "https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign",
+    method: "POST",
+    headers: { authorization: "Bearer token", "x-request-sign": "sig" },
+    bodyText: '{"scene":"IMAGE_TO_IMAGE","fileNameSuffix":"jpeg"}',
+    responseText: "HTTP 200",
+  },
+});
+assert.equal(presignSnapshot.presign.url, "https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign");
+assert.equal(presignSnapshot.presign.headers.authorization, "Bearer token");
+assert.equal(presignSnapshot.presign.bodyText, '{"scene":"IMAGE_TO_IMAGE","fileNameSuffix":"jpeg"}');
+
+const parsedPresignRequest = parsePowerShellRequest(`
+$session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+Invoke-WebRequest -UseBasicParsing -Uri "https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign" \`
+-Method "POST" \`
+-WebSession $session \`
+-Headers @{
+"authority"="api.tensor.art"
+"authorization"="Bearer token"
+"origin"="https://tensor.art"
+"referer"="https://tensor.art/images/example"
+"x-request-lang"="zh-TW"
+"x-request-sign"="sig-pre"
+"x-request-sign-type"="HMAC_SHA256"
+"x-request-timestamp"="1779594195479"
+} \`
+-ContentType "application/json" \`
+-Body "{\`"scene\`":\`"IMAGE_TO_IMAGE\`",\`"fileNameSuffix\`":\`"jpeg\`"}"
+`);
+
+assert.equal(parsedPresignRequest.url, "https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign");
+assert.equal(parsedPresignRequest.method, "POST");
+assert.deepEqual(plain(parsedPresignRequest.headers), {
+  authorization: "Bearer token",
+  "x-request-lang": "zh-TW",
+  "x-request-sign": "sig-pre",
+  "x-request-sign-type": "HMAC_SHA256",
+  "x-request-timestamp": "1779594195479",
+});
+assert.deepEqual(JSON.parse(parsedPresignRequest.bodyText), {
+  scene: "IMAGE_TO_IMAGE",
+  fileNameSuffix: "jpeg",
+});
 
 const sourceBody = JSON.stringify({
   params: {

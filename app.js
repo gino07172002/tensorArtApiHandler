@@ -65,6 +65,7 @@ function loadState() {
     send: blankRequestState(),
     query: blankRequestState(),
     post: blankRequestState(),
+    presign: blankRequestState(),
     canvasRequest: blankRequestState(),
     selectedImageIds: [],
     galleryItems: [],
@@ -83,6 +84,7 @@ function loadState() {
       send: { ...blankRequestState(), ...(parsed.send || {}) },
       query: { ...blankRequestState(), ...(parsed.query || {}) },
       post: { ...blankRequestState(), ...(parsed.post || {}) },
+      presign: { ...blankRequestState(), ...(parsed.presign || {}) },
       canvasRequest: { ...blankRequestState(), ...(parsed.canvasRequest || {}) },
       selectedImageIds: Array.isArray(parsed.selectedImageIds) ? parsed.selectedImageIds : [],
       galleryItems: Array.isArray(parsed.galleryItems) ? parsed.galleryItems : [],
@@ -118,6 +120,7 @@ function buildSnapshotData(source) {
     send: cloneRequestDraft(source.send),
     query: cloneRequestDraft(source.query),
     post: cloneRequestDraft(source.post),
+    presign: cloneRequestDraft(source.presign),
     canvasRequest: cloneRequestDraft(source.canvasRequest),
     selectedImageIds: Array.isArray(source.selectedImageIds) ? [...source.selectedImageIds] : [],
     galleryItems: Array.isArray(source.galleryItems) ? JSON.parse(JSON.stringify(source.galleryItems)) : [],
@@ -161,6 +164,7 @@ async function importStorageSnapshot(event) {
     Object.assign(state.send, incoming.send);
     Object.assign(state.query, incoming.query);
     Object.assign(state.post, incoming.post);
+    Object.assign(state.presign, incoming.presign);
     Object.assign(state.canvasRequest, incoming.canvasRequest);
     state.selectedImageIds = incoming.selectedImageIds;
     state.galleryItems = incoming.galleryItems;
@@ -449,6 +453,7 @@ function initMetadataPage() {
 }
 
 function initCanvasPage() {
+  const presign = bindRequestSection("presign");
   const dom = {
     canvas: document.querySelector("#canvas-stage"),
     file: document.querySelector("#canvas-file"),
@@ -498,6 +503,8 @@ function initCanvasPage() {
   };
 
   if (!dom.canvas) return;
+
+  bindCanvasPresignSection(presign);
 
   const editor = createCanvasEditor(dom.canvas, dom);
   renderCanvasEditor(editor);
@@ -666,6 +673,38 @@ function initCanvasPage() {
   dom.canvas.addEventListener("pointercancel", endPointer);
   dom.canvas.addEventListener("pointerleave", () => {
     if (!editor.pointer) dom.canvas.style.cursor = "";
+  });
+}
+
+function bindCanvasPresignSection(section) {
+  if (!section.powershell) return;
+
+  renderRequestSection("presign", section);
+  initializeRequestSectionVisibility("presign", section);
+  bindSectionInputs("presign", section);
+
+  section.parseButton.addEventListener("click", () => {
+    try {
+      Object.assign(state.presign, parsePowerShellRequest(section.powershell.value));
+      state.presign.bodyText = formatJsonString(state.presign.bodyText);
+      saveState();
+      renderRequestSection("presign", section);
+      collapseRequestSection(section);
+    } catch (error) {
+      setResponse("presign", `解析失敗: ${error.message}`);
+      renderRequestSection("presign", section);
+    }
+  });
+
+  section.requestButton.addEventListener("click", async () => {
+    await submitRequestSection("presign", section, false);
+    renderPresignUploadSummary(section);
+  });
+
+  section.formatButton.addEventListener("click", () => {
+    state.presign.bodyText = formatJsonString(section.body.value);
+    saveState();
+    renderRequestSection("presign", section);
   });
 }
 
@@ -892,6 +931,30 @@ function buildFetchRequest(key) {
 function setResponse(key, text) {
   state[key].responseText = text;
   saveState();
+}
+
+function renderPresignUploadSummary(section) {
+  const raw = state.presign.responseText || "";
+  const jsonText = raw.replace(/^HTTP\s+\d+\s*\r?\n/i, "").trim();
+  if (!jsonText) return;
+
+  try {
+    const json = JSON.parse(jsonText);
+    const uploadUrl = json?.data?.uploadUrl || "";
+    const displayUrl = json?.data?.displayUrl || "";
+    if (!uploadUrl && !displayUrl) return;
+
+    const summary = {
+      uploadUrl: uploadUrl || null,
+      displayUrl: displayUrl || null,
+      nextStep: uploadUrl ? "Use PUT with image/jpeg mask blob, then place displayUrl into the Canvas mask/image field." : null,
+    };
+    state.presign.responseText = `${raw}\n\n--- pre_sign upload fields ---\n${JSON.stringify(summary, null, 2)}`;
+    saveState();
+    renderRequestSection("presign", section);
+  } catch {
+    // Non-JSON responses are already shown verbatim.
+  }
 }
 
 function syncGenerationImageIds() {

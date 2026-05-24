@@ -68,6 +68,7 @@ pre {
 }
 
 .hero-copy,
+.section-copy,
 .warning-panel p,
 .gallery-stats {
   margin: 8px 0 0;
@@ -512,6 +513,31 @@ button:hover {
 
 .canvas-hero {
   border-radius: 18px;
+}
+
+.presign-panel {
+  margin-top: 16px;
+  border-radius: 18px;
+  background: rgba(255, 249, 238, 0.9);
+}
+
+.presign-panel .panel-header {
+  align-items: center;
+}
+
+.presign-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.92fr) minmax(360px, 1.08fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.presign-grid .response-fold {
+  margin-top: 0;
+}
+
+.compact-left {
+  justify-content: flex-start;
 }
 
 .canvas-workbench {
@@ -1000,7 +1026,8 @@ button:hover {
   }
 
   .api-grid,
-  .inline-grid {
+  .inline-grid,
+  .presign-grid {
     grid-template-columns: 1fr;
   }
 
