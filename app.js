@@ -1454,10 +1454,7 @@ function buildResponsePreview(text) {
 }
 
 function buildResponseBodyPreview(text) {
-  if (!text) return "";
-  const lines = text.split(/\r?\n/);
-  const preview = lines.slice(0, 5).join("\n");
-  return lines.length > 5 ? `${preview}\n...` : preview;
+  return text || "";
 }
 
 function buildSourcePreview(request) {

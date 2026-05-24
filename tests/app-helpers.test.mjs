@@ -36,6 +36,7 @@ globalThis.__testExports = {
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   buildSnapshotData,
+  buildResponseBodyPreview,
   getState: () => state,
   parsePowerShellRequest,
   renderGallery,
@@ -54,6 +55,7 @@ const {
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   buildSnapshotData,
+  buildResponseBodyPreview,
   getState,
   parsePowerShellRequest,
   renderGallery,
@@ -168,6 +170,17 @@ assert.deepEqual(JSON.parse(parsedPresignRequest.bodyText), {
   scene: "IMAGE_TO_IMAGE",
   fileNameSuffix: "jpeg",
 });
+
+const longResponse = [
+  "HTTP 200",
+  "{",
+  '  "data": {',
+  '    "uploadUrl": "https://upload.example.test/mask.jpg",',
+  '    "displayUrl": "https://display.example.test/mask.jpg"',
+  "  }",
+  "}",
+].join("\n");
+assert.equal(buildResponseBodyPreview(longResponse), longResponse);
 
 const sourceBody = JSON.stringify({
   params: {
