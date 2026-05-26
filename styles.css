@@ -236,6 +236,10 @@ textarea:focus {
 
 .editor-fold summary,
 .response-fold summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
   list-style: none;
   padding: 12px 16px;
@@ -275,6 +279,38 @@ textarea:focus {
   background: transparent;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.response-fold[data-response-view="preview"] .response-box {
+  max-height: calc(1.55em * 5);
+  overflow: hidden;
+}
+
+.response-fold[data-response-view="full"] .response-box {
+  max-height: none;
+  overflow: visible;
+}
+
+.response-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.response-action {
+  padding: 4px 8px;
+  border: 1px solid rgba(196, 79, 43, 0.22);
+  border-radius: 8px;
+  color: var(--accent-dark);
+  background: rgba(196, 79, 43, 0.08);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.response-action:hover {
+  background: rgba(196, 79, 43, 0.16);
 }
 
 .meta-strip {

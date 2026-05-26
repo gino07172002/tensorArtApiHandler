@@ -904,15 +904,45 @@ function renderRequestSection(key, section) {
   section.response.textContent = buildResponseBodyPreview(state[key].responseText);
   section.sourceSummary.textContent = buildSourcePreview(state[key]);
   section.responseSummary.textContent = buildResponsePreview(state[key].responseText);
+  ensureResponseControls(section);
   
   if (section.clearOnSubmit) {
     section.clearOnSubmit.checked = state[key].clearOnSubmit || false;
   }
 }
 
+function ensureResponseControls(section) {
+  if (!section.responseFold || !section.responseSummary) {
+    return;
+  }
+
+  section.responseFold.dataset.responseView = section.responseFold.dataset.responseView || "preview";
+  if (section.responseSummary.querySelector(".response-actions")) {
+    return;
+  }
+
+  const actions = document.createElement("span");
+  actions.className = "response-actions";
+  actions.innerHTML = `
+    <button type="button" class="response-action" data-response-action="expand">全部展開</button>
+    <button type="button" class="response-action" data-response-action="collapse">全部收攏</button>
+  `;
+  section.responseSummary.append(actions);
+
+  actions.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-response-action]");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    section.responseFold.open = true;
+    section.responseFold.dataset.responseView = button.dataset.responseAction === "expand" ? "full" : "preview";
+  });
+}
+
 function collapseRequestSection(section) {
   section.sourceFold.open = false;
   section.responseFold.open = false;
+  section.responseFold.dataset.responseView = "preview";
 }
 
 function initializeRequestSectionVisibility(key, section) {
@@ -925,6 +955,7 @@ function initializeRequestSectionVisibility(key, section) {
 
   section.sourceFold.open = !hasAPIData && !request.powershell.trim();
   section.responseFold.open = false;
+  section.responseFold.dataset.responseView = "preview";
 }
 
 async function submitRequestSection(key, section, updateGallery) {
@@ -933,12 +964,14 @@ async function submitRequestSection(key, section, updateGallery) {
     setResponse(key, "送出中...");
     renderRequestSection(key, section);
     section.responseFold.open = true;
+    section.responseFold.dataset.responseView = "preview";
 
     const response = await fetch(request.url, request.options);
     const text = await response.text();
     setResponse(key, `HTTP ${response.status}\n${formatResponse(text)}`);
     renderRequestSection(key, section);
     section.responseFold.open = true;
+    section.responseFold.dataset.responseView = "preview";
 
     if (updateGallery) {
       const json = JSON.parse(text);
@@ -950,6 +983,7 @@ async function submitRequestSection(key, section, updateGallery) {
     setResponse(key, `Request 失敗: ${error.message}`);
     renderRequestSection(key, section);
     section.responseFold.open = true;
+    section.responseFold.dataset.responseView = "preview";
     return null;
   }
 }

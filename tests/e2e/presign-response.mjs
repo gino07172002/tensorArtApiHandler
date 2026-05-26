@@ -67,12 +67,28 @@ await page.waitForFunction(() => document.querySelector("#presign-response")?.te
 
 const isOpen = await page.locator("#presign-response-fold").evaluate((el) => el.open);
 const rendered = await page.locator("#presign-response").textContent();
+const initialView = await page.locator("#presign-response-fold").getAttribute("data-response-view");
+const initialBox = await page.locator("#presign-response").boundingBox();
 
 assert.equal(isOpen, true);
+assert.equal(initialView, "preview");
 assert.match(rendered, /HTTP 200/);
 assert.match(rendered, /full-mask-body\.jpeg/);
 assert.match(rendered, /--- pre_sign upload fields ---/);
 assert.match(rendered, /Use PUT with image\/jpeg mask blob/);
+assert.ok(initialBox.height < 140, `preview should stay near five lines, got ${initialBox.height}`);
+
+await page.locator('[data-response-action="expand"]').click();
+const expandedView = await page.locator("#presign-response-fold").getAttribute("data-response-view");
+const expandedBox = await page.locator("#presign-response").boundingBox();
+assert.equal(expandedView, "full");
+assert.ok(expandedBox.height > initialBox.height, `expanded body should be taller than preview: ${expandedBox.height} <= ${initialBox.height}`);
+
+await page.locator('[data-response-action="collapse"]').click();
+const collapsedView = await page.locator("#presign-response-fold").getAttribute("data-response-view");
+const collapsedBox = await page.locator("#presign-response").boundingBox();
+assert.equal(collapsedView, "preview");
+assert.ok(collapsedBox.height <= initialBox.height + 2, `collapsed body should return to five-line preview: ${collapsedBox.height} > ${initialBox.height}`);
 
 await browser.close();
 server.close();
