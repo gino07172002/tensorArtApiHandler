@@ -56,6 +56,9 @@ await page.route("https://api.tensor.art/community-web/v1/cloudflare/upload/pre_
 
 await page.goto(`http://localhost:${port}/canvas.html`);
 await page.waitForSelector("#presign-request");
+await page.waitForSelector(".version-badge[data-app-version]");
+assert.equal(await page.locator(".version-badge[data-app-version]").textContent(), "v2026.05.26-response-preview-30");
+assert.equal(await page.evaluate(() => window.__APP_VERSION__), "v2026.05.26-response-preview-30");
 
 await page.locator("#presign-source-summary").click();
 await page.locator("#presign-url").fill("https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign");

@@ -1,4 +1,5 @@
 ﻿const STORAGE_KEY = "tensor-api-qa-console-v2";
+const APP_VERSION = "v2026.05.26-response-preview-30";
 const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
 const JPEG_SOI = [0xff, 0xd8];
 const FORBIDDEN_HEADERS = new Set([
@@ -26,6 +27,7 @@ const state = loadState();
 const page = document.body.dataset.page;
 
 bindCommonControls();
+renderAppVersion();
 
 if (page === "send") {
   initSendPage();
@@ -141,6 +143,23 @@ function bindCommonControls() {
   importButton?.addEventListener("click", () => importFile?.click());
   importFile?.addEventListener("change", importStorageSnapshot);
   clearButton?.addEventListener("click", clearStorage);
+}
+
+function renderAppVersion() {
+  globalThis.__APP_VERSION__ = APP_VERSION;
+  if (document.documentElement) {
+    document.documentElement.dataset.appVersion = APP_VERSION;
+  }
+
+  const actions = document.querySelector(".hero-actions");
+  if (!actions || actions.querySelector("[data-app-version]")) return;
+
+  const badge = document.createElement("span");
+  badge.className = "version-badge";
+  badge.dataset.appVersion = APP_VERSION;
+  badge.textContent = APP_VERSION;
+  badge.title = "目前載入的前端版本";
+  actions.prepend(badge);
 }
 
 function exportStorageSnapshot() {
