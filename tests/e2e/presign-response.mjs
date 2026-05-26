@@ -90,6 +90,15 @@ const collapsedBox = await page.locator("#presign-response").boundingBox();
 assert.equal(collapsedView, "preview");
 assert.ok(collapsedBox.height <= initialBox.height + 2, `collapsed body should return to five-line preview: ${collapsedBox.height} > ${initialBox.height}`);
 
+await page.locator('[data-response-action="expand"]').click();
+assert.equal(await page.locator("#presign-response-fold").getAttribute("data-response-view"), "full");
+await page.locator("#presign-request").click();
+await page.waitForFunction(() => document.querySelector("#presign-response")?.textContent.includes("full-mask-body.jpeg"));
+const afterRequestView = await page.locator("#presign-response-fold").getAttribute("data-response-view");
+const afterRequestBox = await page.locator("#presign-response").boundingBox();
+assert.equal(afterRequestView, "preview");
+assert.ok(afterRequestBox.height <= initialBox.height + 2, `request should reset response to five-line preview: ${afterRequestBox.height} > ${initialBox.height}`);
+
 await browser.close();
 server.close();
 console.log("presign expanded response body test passed");
