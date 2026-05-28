@@ -33,6 +33,7 @@ globalThis.__testExports = {
   readCanvasColorAtPoint,
   applyParsedCanvasRequestToForm,
   storeCanvasParsedRequest,
+  sanitizeJsonTextControlCharacters,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   buildSnapshotData,
@@ -52,6 +53,7 @@ const {
   readCanvasColorAtPoint,
   applyParsedCanvasRequestToForm,
   storeCanvasParsedRequest,
+  sanitizeJsonTextControlCharacters,
   buildCanvasImportFromGalleryEntry,
   copyGenerationToSendBody,
   buildSnapshotData,
@@ -111,6 +113,24 @@ assert.deepEqual(plain(parsedLooseRequest.headers), {
   "x-request-sign": "sig-2",
 });
 assert.equal(parsedLooseRequest.bodyText, '{"params":{"prompt":"ok"}}');
+
+const repairedBodyText = sanitizeJsonTextControlCharacters(`{
+  "params": {
+    "prompt": "innocent cute girl,
+medium hair",
+    "negativePrompt": "bad	quality"
+  },
+  "taskType": "TXT2IMG"
+}`);
+assert.match(repairedBodyText, /cute girl,\\nmedium hair/);
+assert.match(repairedBodyText, /bad\\tquality/);
+assert.deepEqual(JSON.parse(repairedBodyText), {
+  params: {
+    prompt: "innocent cute girl,\nmedium hair",
+    negativePrompt: "bad\tquality",
+  },
+  taskType: "TXT2IMG",
+});
 
 assert.deepEqual(plain(getState().presign), {
   powershell: "",

@@ -546,10 +546,14 @@ function initCanvasPage() {
     saveState();
   });
   dom.body.addEventListener("input", () => {
+    const bodyText = sanitizeJsonTextControlCharacters(dom.body.value);
+    if (bodyText !== dom.body.value) {
+      dom.body.value = bodyText;
+    }
     state.canvasRequest = {
       ...blankRequestState(),
       ...state.canvasRequest,
-      bodyText: dom.body.value,
+      bodyText,
     };
     saveState();
   });
@@ -815,7 +819,11 @@ function bindSectionInputs(key, section) {
     saveState();
   });
   section.body.addEventListener("input", (event) => {
-    state[key].bodyText = event.target.value;
+    const bodyText = sanitizeJsonTextControlCharacters(event.target.value);
+    if (bodyText !== event.target.value) {
+      event.target.value = bodyText;
+    }
+    state[key].bodyText = bodyText;
     saveState();
   });
   if (section.clearOnSubmit) {
@@ -1018,7 +1026,7 @@ function buildFetchRequest(key) {
   };
 
   if (request.bodyText.trim()) {
-    options.body = JSON.stringify(JSON.parse(request.bodyText));
+    options.body = JSON.stringify(JSON.parse(sanitizeJsonTextControlCharacters(request.bodyText)));
   }
 
   return { url: request.url, options };
@@ -1525,12 +1533,64 @@ function decodePowerShellQuotedString(value, quote = "\"") {
   return decodePowerShellString(value);
 }
 
+function sanitizeJsonTextControlCharacters(text) {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (const char of text) {
+    if (!inString) {
+      result += char;
+      if (char === "\"") inString = true;
+      continue;
+    }
+
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      result += char;
+      escaped = true;
+      continue;
+    }
+
+    if (char === "\"") {
+      result += char;
+      inString = false;
+      continue;
+    }
+
+    const code = char.charCodeAt(0);
+    if (code >= 0x20) {
+      result += char;
+    } else if (char === "\n") {
+      result += "\\n";
+    } else if (char === "\r") {
+      result += "\\r";
+    } else if (char === "\t") {
+      result += "\\t";
+    } else if (char === "\b") {
+      result += "\\b";
+    } else if (char === "\f") {
+      result += "\\f";
+    } else {
+      result += `\\u${code.toString(16).padStart(4, "0")}`;
+    }
+  }
+
+  return result;
+}
+
 function formatJsonString(text) {
   if (!text.trim()) return "";
+  const sanitized = sanitizeJsonTextControlCharacters(text);
   try {
-    return JSON.stringify(JSON.parse(text), null, 2);
+    return JSON.stringify(JSON.parse(sanitized), null, 2);
   } catch {
-    return text;
+    return sanitized;
   }
 }
 
@@ -1751,7 +1811,7 @@ function storeCanvasParsedRequest(parsed) {
 }
 
 function applyParsedCanvasRequestToForm(request, editor, dom) {
-  const payload = JSON.parse(request.bodyText || "{}");
+  const payload = JSON.parse(sanitizeJsonTextControlCharacters(request.bodyText || "{}"));
   const params = payload.params || {};
   const baseModel = params.baseModel || {};
   const mode = request.url.includes("task_by_image") || payload.taskType === "IMAGE_TO_INPAINT"
@@ -1804,7 +1864,10 @@ async function sendCanvasRequest(editor, dom) {
   dom.stats.textContent = "送出中...";
 
   try {
-    let bodyText = dom.body.value.trim() || JSON.stringify(draft.body, null, 2);
+    let bodyText = sanitizeJsonTextControlCharacters(dom.body.value.trim()) || JSON.stringify(draft.body, null, 2);
+    if (bodyText !== dom.body.value.trim()) {
+      dom.body.value = bodyText;
+    }
     const payload = JSON.parse(bodyText);
 
     state.canvasRequest = {
