@@ -43,6 +43,42 @@ await page.goto(`http://localhost:${port}/canvas.html`);
 await page.waitForSelector("#canvas-stage");
 await page.waitForTimeout(200);
 
+// Test 0: layout gives the canvas a large work area with compact, resizable prompts
+const initialLayout = await page.evaluate(() => {
+  const prompt = document.querySelector(".canvas-prompt-panel").getBoundingClientRect();
+  const stage = document.querySelector(".canvas-stage-panel").getBoundingClientRect();
+  const frame = document.querySelector(".stage-frame").getBoundingClientRect();
+  const toolbar = document.querySelector(".canvas-toolbar").getBoundingClientRect();
+  const canvas = document.querySelector("#canvas-stage").getBoundingClientRect();
+  const denoise = document.querySelector("#canvas-denoise");
+  const promptStyle = getComputedStyle(document.querySelector(".canvas-prompt-panel"));
+  const toolbarStyle = getComputedStyle(document.querySelector(".canvas-toolbar"));
+  return {
+    promptHeight: prompt.height,
+    promptResize: promptStyle.resize,
+    stageTop: stage.top,
+    frameHeight: frame.height,
+    toolbarDirection: toolbarStyle.flexDirection,
+    toolbarRight: toolbar.right,
+    canvasLeft: canvas.left,
+    toolbarTop: toolbar.top,
+    canvasTop: canvas.top,
+    denoiseType: denoise.type,
+  };
+});
+if (initialLayout.promptHeight > 90) note("prompt panel too tall by default", `${initialLayout.promptHeight}px`);
+if (initialLayout.promptResize !== "vertical") note("prompt panel is not vertically resizable", initialLayout.promptResize);
+if (initialLayout.stageTop > 180) note("stage starts too low", `${initialLayout.stageTop}px`);
+if (initialLayout.frameHeight < 560) note("canvas work area too short", `${initialLayout.frameHeight}px`);
+if (initialLayout.toolbarDirection !== "column") note("toolbar is not vertical", initialLayout.toolbarDirection);
+if (initialLayout.toolbarRight > initialLayout.canvasLeft + 4) {
+  note("toolbar is not placed on the canvas left side", `toolbarRight=${initialLayout.toolbarRight}, canvasLeft=${initialLayout.canvasLeft}`);
+}
+if (Math.abs(initialLayout.toolbarTop - initialLayout.canvasTop) > 60) {
+  note("toolbar is not aligned with canvas top", `toolbarTop=${initialLayout.toolbarTop}, canvasTop=${initialLayout.canvasTop}`);
+}
+if (initialLayout.denoiseType !== "range") note("denoise is not a slider", initialLayout.denoiseType);
+
 // Test 1: change API to portrait 1024x1536 - canvas should resize
 await page.locator("#canvas-height").fill("1536");
 await page.waitForTimeout(150);

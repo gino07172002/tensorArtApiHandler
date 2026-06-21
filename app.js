@@ -565,6 +565,7 @@ function initCanvasPage() {
     brushPopover: document.querySelector("#canvas-brush-popover"),
     brushSizeVal: document.querySelector("#canvas-brush-size-val"),
     brushOpacityVal: document.querySelector("#canvas-brush-opacity-val"),
+    denoisingStrengthVal: document.querySelector("#canvas-denoise-val"),
     inpaintPowerShell: document.querySelector("#canvas-inpaint-powershell"),
     inpaintParse: document.querySelector("#canvas-inpaint-parse"),
     inpaintHeaders: document.querySelector("#canvas-inpaint-headers"),
@@ -583,6 +584,7 @@ function initCanvasPage() {
   hydrateCanvasStoredEditor(editor, dom);
   renderCanvasEditor(editor);
   applyCanvasImport(editor, dom);
+  syncCanvasDenoiseOutput(dom);
   if (state.canvasImport || !state.canvasRequest.bodyText.trim()) {
     updateCanvasBodyPreview(editor, dom, { force: true });
   }
@@ -756,6 +758,7 @@ function initCanvasPage() {
     dom.modelFileId,
   ].forEach((input) => {
     input.addEventListener("input", () => {
+      if (input === dom.denoisingStrength) syncCanvasDenoiseOutput(dom);
       updateCanvasBodyPreview(editor, dom);
       persistCanvasEditorState(editor, dom);
     });
@@ -1851,6 +1854,7 @@ function parseCanvasPowerShellRequest(editor, dom) {
   try {
     const parsed = parsePowerShellRequest(dom.inpaintPowerShell.value);
     applyParsedCanvasRequestToForm(parsed, editor, dom);
+    syncCanvasDenoiseOutput(dom);
 
     storeCanvasParsedRequest(parsed);
     saveState();
@@ -2135,6 +2139,12 @@ function createCanvasEditor(canvas, dom) {
   };
 }
 
+function syncCanvasDenoiseOutput(dom) {
+  if (!dom.denoisingStrength || !dom.denoisingStrengthVal) return;
+  const value = Number(dom.denoisingStrength.value || 0);
+  dom.denoisingStrengthVal.textContent = Number.isFinite(value) ? value.toFixed(2) : "0.00";
+}
+
 function buildCanvasEditorSnapshot(editor, dom) {
   return cloneCanvasEditorSnapshot({
     mode: dom.mode.value,
@@ -2281,6 +2291,7 @@ function syncCanvasEditorControls(editor, dom) {
   });
   if (dom.brushSizeVal && dom.brushSize) dom.brushSizeVal.textContent = dom.brushSize.value;
   if (dom.brushOpacityVal && dom.brushOpacity) dom.brushOpacityVal.textContent = dom.brushOpacity.value;
+  syncCanvasDenoiseOutput(dom);
 }
 
 function createPaintLayer(name, width, height) {
@@ -2454,6 +2465,7 @@ function applyCanvasImport(editor, dom) {
   if (incoming.imageUrl) {
     loadCanvasImageUrlWithFallback(incoming.imageUrl, editor, dom);
   }
+  syncCanvasDenoiseOutput(dom);
   persistCanvasEditorState(editor, dom);
 
   dom.stats.textContent = incoming.mode === "inpaint"
