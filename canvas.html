@@ -7,252 +7,282 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles.css?v=response-preview-28">
+  <link rel="stylesheet" href="./styles.css?v=canvas-layout-1">
 </head>
 <body data-page="canvas">
   <div class="app-shell canvas-shell">
-    <header class="hero canvas-hero">
+    <header class="canvas-topbar">
       <div>
         <p class="eyebrow">Image Workspace</p>
         <h1>Canvas Editor</h1>
-        <p class="hero-copy">Load a base image, paint masks, edit transforms, and build Inpaint / Img2Img API bodies.</p>
       </div>
+      <nav class="canvas-nav" aria-label="Pages">
+        <a class="page-link" href="./index.html">Dashboard</a>
+        <a class="page-link" href="./gallery.html">Gallery</a>
+        <a class="page-link" href="./metadata.html">Metadata</a>
+        <a class="page-link is-active" href="./canvas.html">Canvas</a>
+      </nav>
       <div class="hero-actions">
         <button type="button" id="export-storage" class="ghost-button">Export</button>
         <button type="button" id="import-storage" class="ghost-button">Import</button>
-        <button type="button" id="clear-storage" class="ghost-button">Clear localStorage</button>
+        <button type="button" id="clear-storage" class="ghost-button">Clear</button>
         <input id="import-storage-file" type="file" accept="application/json" hidden>
       </div>
     </header>
 
-    <nav class="page-nav">
-      <a class="page-link" href="./index.html">Dashboard</a>
-      <a class="page-link" href="./gallery.html">Query / Gallery / Post</a>
-      <a class="page-link" href="./metadata.html">Metadata</a>
-      <a class="page-link is-active" href="./canvas.html">Canvas Editor</a>
-    </nav>
+    <main class="canvas-workbench">
+      <aside class="canvas-inspector">
+        <section class="panel canvas-source-panel">
+          <div class="panel-header compact-header">
+            <div>
+              <p class="eyebrow">Source / Mask</p>
+              <h2>原圖與遮罩</h2>
+            </div>
+            <span id="canvas-stage-size" class="stage-size">1024x768</span>
+          </div>
 
-    <section class="panel presign-panel">
-      <div class="panel-header">
-        <div>
-          <p class="eyebrow">Upload Probe</p>
-          <h2>pre_sign Experiment</h2>
-          <p class="section-copy">Paste the Tensor pre_sign PowerShell here to test whether the parsed headers and JSON body can obtain a mask upload URL.</p>
-        </div>
-        <button type="button" id="presign-request" class="primary-button">Send pre_sign</button>
-      </div>
+          <label class="field canvas-file-field">
+            <span>原圖</span>
+            <input id="canvas-file" type="file" accept="image/*">
+          </label>
 
-      <label class="field">
-        <span>PowerShell Source</span>
-        <textarea id="presign-powershell" rows="5" spellcheck="false" placeholder="Paste Invoke-WebRequest ... /community-web/v1/cloudflare/upload/pre_sign"></textarea>
-      </label>
-      <div class="button-row compact-left">
-        <button type="button" id="presign-parse" class="ghost-button">Parse PowerShell</button>
-      </div>
+          <div class="layer-mode-switch" aria-label="Layer">
+            <button type="button" class="layer-button is-active" data-canvas-layer="paint" title="Paint layer">圖層</button>
+            <button type="button" class="layer-button" data-canvas-layer="mask" title="Mask layer">遮罩</button>
+          </div>
 
-      <details id="presign-source-fold" class="editor-fold request-source-fold">
-        <summary id="presign-source-summary">API details waiting for parse</summary>
-        <div class="fold-body">
-          <div class="inline-grid">
+          <div class="layer-panel paint-only" aria-label="Paint layers">
+            <div class="layer-panel-header">
+              <span class="field-label" style="margin:0">Layers</span>
+              <div class="layer-actions">
+                <button type="button" id="canvas-layer-add" class="icon-button" title="Add layer" aria-label="Add layer">+</button>
+                <button type="button" id="canvas-layer-up" class="icon-button" title="Move up" aria-label="Move up">↑</button>
+                <button type="button" id="canvas-layer-down" class="icon-button" title="Move down" aria-label="Move down">↓</button>
+                <button type="button" id="canvas-layer-remove" class="icon-button" title="Delete layer" aria-label="Delete layer">-</button>
+              </div>
+            </div>
+            <ul id="canvas-layer-list" class="layer-list"></ul>
+            <p class="layer-hint">筆刷會畫到 <strong id="canvas-active-layer-name">Layer 1</strong>。</p>
+          </div>
+
+          <button type="button" id="canvas-clear-mask" class="ghost-button mask-reset">重設遮罩</button>
+        </section>
+
+        <section class="panel canvas-controls-panel">
+          <div>
+            <p class="eyebrow">Img2Img / Inpaint</p>
+            <h2>控制項</h2>
+          </div>
+
+          <label class="field">
+            <span>Mode</span>
+            <select id="canvas-mode">
+              <option value="inpaint">Inpaint / task_by_image</option>
+              <option value="img2img">Img2Img / task</option>
+            </select>
+          </label>
+
+          <div class="inline-grid dense-grid">
             <label class="field">
-              <span>URL</span>
-              <input id="presign-url" type="text">
+              <span>Width</span>
+              <input id="canvas-width" type="number" value="1024">
             </label>
             <label class="field">
-              <span>Method</span>
-              <input id="presign-method" type="text">
+              <span>Height</span>
+              <input id="canvas-height" type="number" value="768">
+            </label>
+            <label class="field">
+              <span>Steps</span>
+              <input id="canvas-steps" type="number" value="25">
+            </label>
+            <label class="field">
+              <span>CFG</span>
+              <input id="canvas-cfg" type="number" step="0.5" value="5">
+            </label>
+            <label class="field">
+              <span>Seed</span>
+              <input id="canvas-seed" type="text" value="-1">
+            </label>
+            <label class="field">
+              <span>Denoise</span>
+              <input id="canvas-denoise" type="number" step="0.01" min="0" max="1" value="0.51">
             </label>
           </div>
+
+          <div class="inline-grid">
+            <label class="field">
+              <span>Model ID</span>
+              <input id="canvas-model-id" type="text" placeholder="modelId">
+            </label>
+            <label class="field">
+              <span>Model File ID</span>
+              <input id="canvas-model-file-id" type="text" placeholder="modelFileId">
+            </label>
+          </div>
+
+          <div class="button-row">
+            <button type="button" id="canvas-build" class="ghost-button">Update Body</button>
+          </div>
+
           <label class="field">
-            <span>Headers</span>
-            <textarea id="presign-headers" rows="7" spellcheck="false"></textarea>
+            <span>Body Preview</span>
+            <textarea id="canvas-body" rows="13" spellcheck="false"></textarea>
           </label>
-        </div>
-      </details>
 
-      <div class="presign-grid">
-        <label class="field">
-          <span>Send Body</span>
-          <textarea id="presign-body" rows="8" spellcheck="false"></textarea>
-        </label>
-        <label class="field">
-          <span>Response</span>
-          <details id="presign-response-fold" class="response-fold">
-            <summary id="presign-response-summary">Response preview</summary>
-            <pre id="presign-response" class="response-box"></pre>
+          <details id="canvas-response-fold" class="response-fold">
+            <summary>Response</summary>
+            <pre id="canvas-response" class="response-box">尚未送出。</pre>
           </details>
-        </label>
-      </div>
-      <div class="button-row compact-left">
-        <button type="button" id="presign-format" class="ghost-button">Format Body</button>
-      </div>
-    </section>
+        </section>
+      </aside>
 
-    <main class="canvas-workbench">
-      <aside class="canvas-inspector panel">
-        <div>
-          <p class="eyebrow">Request</p>
-          <h2>API Body</h2>
+      <section class="canvas-stage-column">
+        <section class="panel canvas-prompt-panel">
+          <label class="field prompt-field">
+            <span>Prompt</span>
+            <textarea id="canvas-prompt" rows="2" placeholder="Describe the image..."></textarea>
+          </label>
+          <label class="field negative-field">
+            <span>Negative</span>
+            <textarea id="canvas-negative" rows="2">bad quality,worst quality,worst detail</textarea>
+          </label>
+          <button type="button" id="canvas-send" class="primary-button generate-button">生成</button>
+        </section>
+
+        <section class="canvas-stage-panel panel">
+          <div class="panel-header stage-header">
+            <div>
+              <p class="eyebrow">Canvas</p>
+              <h2>畫布</h2>
+            </div>
+            <p id="canvas-stats" class="canvas-status">Load an image or send one from Query Results.</p>
+          </div>
+
+          <aside class="canvas-toolbar icon-toolbar" data-active-layer="paint" aria-label="Canvas tools">
+            <div class="icon-toggle icon-tools" aria-label="Tool">
+              <button type="button" class="icon-button is-active paint-only" data-canvas-tool="move" title="Move / transform" aria-label="Move">↕</button>
+              <div class="brush-tool-wrap">
+                <button type="button" class="icon-button" data-canvas-tool="brush" title="Brush (click again to adjust)" aria-label="Brush">B</button>
+                <div id="canvas-brush-popover" class="brush-popover" hidden>
+                  <label class="popover-row">
+                    <span>Size</span>
+                    <input id="canvas-brush-size" type="range" min="2" max="120" value="28">
+                    <output id="canvas-brush-size-val">28</output>
+                  </label>
+                  <label class="popover-row">
+                    <span>Opacity</span>
+                    <input id="canvas-brush-opacity" type="range" min="5" max="100" value="70">
+                    <output id="canvas-brush-opacity-val">70</output>
+                  </label>
+                  <label class="popover-row paint-only">
+                    <span>Color</span>
+                    <input id="canvas-color" type="color" value="#d9480f">
+                  </label>
+                </div>
+              </div>
+              <button type="button" class="icon-button" data-canvas-tool="eraser" title="Erase" aria-label="Erase">E</button>
+              <button type="button" id="canvas-pick" class="icon-button paint-only" title="Pick color from screen" aria-label="Pick color">P</button>
+              <button type="button" id="canvas-clear-paint" class="icon-button paint-only" title="Clear active layer" aria-label="Clear active layer">⌫</button>
+            </div>
+
+            <div class="transform-mini paint-only" aria-label="Transform">
+              <label title="X position"><span aria-hidden="true">X</span><input id="canvas-x" type="number" value="512"></label>
+              <label title="Y position"><span aria-hidden="true">Y</span><input id="canvas-y" type="number" value="384"></label>
+              <label title="Scale %"><span aria-hidden="true">S</span><input id="canvas-scale" type="number" min="5" max="400" value="100"></label>
+              <label title="Rotate"><span aria-hidden="true">R</span><input id="canvas-rotation" type="number" min="-180" max="180" value="0"></label>
+            </div>
+          </aside>
+
+          <div class="stage-frame">
+            <div class="editor-canvas-host">
+              <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <section class="canvas-experiments" aria-label="Experimental tools">
+      <section class="panel canvas-experiment-panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Experiment</p>
+            <h2>Inpaint PowerShell</h2>
+          </div>
+          <button type="button" id="canvas-inpaint-parse" class="ghost-button">Parse Inpaint</button>
         </div>
-        <details id="canvas-inpaint-source-fold" class="source-fold">
+        <details id="canvas-inpaint-source-fold" class="source-fold" open>
           <summary>
-            <span>Inpaint PowerShell</span>
+            <span>task_by_image Source</span>
             <small id="canvas-inpaint-source-summary">Paste a task_by_image request</small>
           </summary>
           <label class="field">
             <span>PowerShell</span>
             <textarea id="canvas-inpaint-powershell" rows="4" placeholder="貼上 Inpaint / task_by_image PowerShell"></textarea>
           </label>
-          <div class="button-row compact-row">
-            <button type="button" id="canvas-inpaint-parse" class="ghost-button">解析 Inpaint</button>
-          </div>
           <label class="field">
             <span>Parsed Headers</span>
             <textarea id="canvas-inpaint-headers" rows="6" spellcheck="false" readonly></textarea>
           </label>
         </details>
-        <div class="layer-panel paint-only" aria-label="Paint layers">
-          <div class="layer-panel-header">
-            <span class="field-label" style="margin:0">Layers</span>
-            <div class="layer-actions">
-              <button type="button" id="canvas-layer-add" class="icon-button" title="Add layer" aria-label="Add layer">＋</button>
-              <button type="button" id="canvas-layer-up" class="icon-button" title="Move up" aria-label="Move up">↑</button>
-              <button type="button" id="canvas-layer-down" class="icon-button" title="Move down" aria-label="Move down">↓</button>
-              <button type="button" id="canvas-layer-remove" class="icon-button" title="Delete layer" aria-label="Delete layer">−</button>
-            </div>
-          </div>
-          <ul id="canvas-layer-list" class="layer-list"></ul>
-          <p class="layer-hint">筆刷會畫到 <strong id="canvas-active-layer-name">Layer 1</strong>。雙擊名稱可重命名。</p>
-        </div>
-        <label class="field">
-          <span>Mode</span>
-          <select id="canvas-mode">
-            <option value="inpaint">Inpaint / task_by_image</option>
-            <option value="img2img">Img2Img / task</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Prompt</span>
-          <textarea id="canvas-prompt" rows="4"></textarea>
-        </label>
-        <label class="field">
-          <span>Negative Prompt</span>
-          <textarea id="canvas-negative" rows="3">bad quality,worst quality,worst detail</textarea>
-        </label>
-        <div class="inline-grid">
-          <label class="field">
-            <span>Width</span>
-            <input id="canvas-width" type="number" value="1024">
-          </label>
-          <label class="field">
-            <span>Height</span>
-            <input id="canvas-height" type="number" value="768">
-          </label>
-          <label class="field">
-            <span>Steps</span>
-            <input id="canvas-steps" type="number" value="25">
-          </label>
-          <label class="field">
-            <span>CFG</span>
-            <input id="canvas-cfg" type="number" step="0.5" value="5">
-          </label>
-          <label class="field">
-            <span>Seed</span>
-            <input id="canvas-seed" type="text" value="-1">
-          </label>
-          <label class="field">
-            <span>Denoise</span>
-            <input id="canvas-denoise" type="number" step="0.01" min="0" max="1" value="0.51">
-          </label>
-        </div>
-        <label class="field">
-          <span>Model ID</span>
-          <input id="canvas-model-id" type="text" placeholder="modelId">
-        </label>
-        <label class="field">
-          <span>Model File ID</span>
-          <input id="canvas-model-file-id" type="text" placeholder="modelFileId">
-        </label>
-        <div class="button-row">
-          <button type="button" id="canvas-build" class="ghost-button">Update Body</button>
-          <button type="button" id="canvas-send" class="primary-button">Send</button>
-        </div>
-        <label class="field">
-          <span>Body Preview</span>
-          <textarea id="canvas-body" rows="14" spellcheck="false"></textarea>
-        </label>
-        <details id="canvas-response-fold" class="response-fold">
-          <summary>Response</summary>
-          <pre id="canvas-response" class="response-box">尚未送出。</pre>
-        </details>
-      </aside>
+      </section>
 
-      <aside class="canvas-toolbar panel icon-toolbar" data-active-layer="paint">
-        <label class="icon-field" title="Load local image">
-          <span class="icon-label" aria-hidden="true">📁</span>
-          <span class="sr-only">Local image</span>
-          <input id="canvas-file" type="file" accept="image/*">
-        </label>
-
-        <div class="icon-toggle" aria-label="Layer">
-          <button type="button" class="icon-button is-active" data-canvas-layer="paint" title="Paint layer" aria-label="Paint layer">🎨</button>
-          <button type="button" class="icon-button" data-canvas-layer="mask" title="Mask layer" aria-label="Mask layer">🩹</button>
-        </div>
-
-        <div class="icon-toggle icon-tools" aria-label="Tool">
-          <button type="button" class="icon-button is-active paint-only" data-canvas-tool="move" title="Move / transform" aria-label="Move">✥</button>
-          <div class="brush-tool-wrap">
-            <button type="button" class="icon-button" data-canvas-tool="brush" title="Brush (click again to adjust)" aria-label="Brush">🖌</button>
-            <div id="canvas-brush-popover" class="brush-popover" hidden>
-              <label class="popover-row">
-                <span>Size</span>
-                <input id="canvas-brush-size" type="range" min="2" max="120" value="28">
-                <output id="canvas-brush-size-val">28</output>
-              </label>
-              <label class="popover-row">
-                <span>Opacity</span>
-                <input id="canvas-brush-opacity" type="range" min="5" max="100" value="70">
-                <output id="canvas-brush-opacity-val">70</output>
-              </label>
-              <label class="popover-row paint-only">
-                <span>Color</span>
-                <input id="canvas-color" type="color" value="#d9480f">
-              </label>
-            </div>
-          </div>
-          <button type="button" class="icon-button" data-canvas-tool="eraser" title="Erase" aria-label="Erase">🧽</button>
-          <button type="button" id="canvas-pick" class="icon-button paint-only" title="Pick color from screen" aria-label="Pick color">💧</button>
-        </div>
-
-        <div class="icon-toggle">
-          <button type="button" id="canvas-clear-paint" class="icon-button paint-only" title="Clear active layer" aria-label="Clear active layer">⌫</button>
-          <button type="button" id="canvas-clear-mask" class="icon-button mask-only" title="Reset mask" aria-label="Reset mask">↺</button>
-        </div>
-
-        <div class="transform-mini paint-only" aria-label="Transform">
-          <label title="X position"><span aria-hidden="true">X</span><input id="canvas-x" type="number" value="512"></label>
-          <label title="Y position"><span aria-hidden="true">Y</span><input id="canvas-y" type="number" value="384"></label>
-          <label title="Scale %"><span aria-hidden="true">⤢</span><input id="canvas-scale" type="number" min="5" max="400" value="100"></label>
-          <label title="Rotate"><span aria-hidden="true">⟳</span><input id="canvas-rotation" type="number" min="-180" max="180" value="0"></label>
-        </div>
-      </aside>
-
-      <section class="canvas-stage-panel panel">
+      <section class="panel presign-panel">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">Stage</p>
-            <h2>Stage <span id="canvas-stage-size" class="stage-size">1024×768</span></h2>
+            <p class="eyebrow">Upload Probe</p>
+            <h2>pre_sign Experiment</h2>
+            <p class="section-copy">Paste the Tensor pre_sign PowerShell here to test whether the parsed headers and JSON body can obtain a mask upload URL.</p>
           </div>
-          <p id="canvas-stats" class="canvas-status">Load an image or send one from Query Results.</p>
+          <button type="button" id="presign-request" class="primary-button">Send pre_sign</button>
         </div>
-        <div class="stage-frame">
-          <div class="editor-canvas-host">
-            <canvas id="canvas-stage" class="editor-canvas" width="1024" height="768"></canvas>
+
+        <label class="field">
+          <span>PowerShell Source</span>
+          <textarea id="presign-powershell" rows="5" spellcheck="false" placeholder="Paste Invoke-WebRequest ... /community-web/v1/cloudflare/upload/pre_sign"></textarea>
+        </label>
+        <div class="button-row compact-left">
+          <button type="button" id="presign-parse" class="ghost-button">Parse PowerShell</button>
+        </div>
+
+        <details id="presign-source-fold" class="editor-fold request-source-fold">
+          <summary id="presign-source-summary">API details waiting for parse</summary>
+          <div class="fold-body">
+            <div class="inline-grid">
+              <label class="field">
+                <span>URL</span>
+                <input id="presign-url" type="text">
+              </label>
+              <label class="field">
+                <span>Method</span>
+                <input id="presign-method" type="text">
+              </label>
+            </div>
+            <label class="field">
+              <span>Headers</span>
+              <textarea id="presign-headers" rows="7" spellcheck="false"></textarea>
+            </label>
           </div>
+        </details>
+
+        <div class="presign-grid">
+          <label class="field">
+            <span>Send Body</span>
+            <textarea id="presign-body" rows="8" spellcheck="false"></textarea>
+          </label>
+          <label class="field">
+            <span>Response</span>
+            <details id="presign-response-fold" class="response-fold">
+              <summary id="presign-response-summary">Response preview</summary>
+              <pre id="presign-response" class="response-box"></pre>
+            </details>
+          </label>
         </div>
-        <p class="canvas-hint">畫布尺寸 = API 的 width × height。畫布外的內容不會被送出。Move 工具下可拖曳圖片內部=平移、四角=縮放、頂端圓點=旋轉。</p>
+        <div class="button-row compact-left">
+          <button type="button" id="presign-format" class="ghost-button">Format Body</button>
+        </div>
       </section>
-    </main>
+    </section>
   </div>
 
   <script type="module" src="./app.js?v=response-preview-28"></script>
