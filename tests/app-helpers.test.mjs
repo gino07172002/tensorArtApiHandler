@@ -158,6 +158,38 @@ assert.equal(presignSnapshot.presign.url, "https://api.tensor.art/community-web/
 assert.equal(presignSnapshot.presign.headers.authorization, "Bearer token");
 assert.equal(presignSnapshot.presign.bodyText, '{"scene":"IMAGE_TO_IMAGE","fileNameSuffix":"jpeg"}');
 
+const canvasEditorSnapshot = buildSnapshotData({
+  ...getState(),
+  canvasEditor: {
+    width: 640,
+    height: 480,
+    layer: "mask",
+    tool: "eraser",
+    brushSize: 42,
+    brushOpacity: 80,
+    color: "#123456",
+    maskDataUrl: "data:image/png;base64,mask",
+    imageDataUrl: "data:image/png;base64,image",
+    sourceImageUrl: "",
+    sourceMaskUrl: "",
+    imageId: "image-1",
+    taskId: "task-1",
+    transform: { x: 320, y: 240, scale: 0.75, rotation: 12 },
+    activeLayerId: "layer-a",
+    layerCounter: 2,
+    layers: [{
+      id: "layer-a",
+      name: "Retouch",
+      visible: true,
+      dataUrl: "data:image/png;base64,layer",
+    }],
+  },
+});
+assert.equal(canvasEditorSnapshot.canvasEditor.layer, "mask");
+assert.equal(canvasEditorSnapshot.canvasEditor.tool, "eraser");
+assert.equal(canvasEditorSnapshot.canvasEditor.maskDataUrl, "data:image/png;base64,mask");
+assert.equal(canvasEditorSnapshot.canvasEditor.layers[0].name, "Retouch");
+
 const parsedPresignRequest = parsePowerShellRequest(`
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 Invoke-WebRequest -UseBasicParsing -Uri "https://api.tensor.art/community-web/v1/cloudflare/upload/pre_sign" \`

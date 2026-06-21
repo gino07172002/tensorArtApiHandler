@@ -73,6 +73,7 @@ function loadState() {
     galleryItems: [],
     queryResultCopySeed: false,
     canvasImport: null,
+    canvasEditor: null,
     importedMetadata: null,
     savedSettings: { send: [], query: [], post: [] },
   };
@@ -92,6 +93,7 @@ function loadState() {
       galleryItems: Array.isArray(parsed.galleryItems) ? parsed.galleryItems : [],
       queryResultCopySeed: Boolean(parsed.queryResultCopySeed),
       canvasImport: parsed.canvasImport ?? null,
+      canvasEditor: cloneCanvasEditorSnapshot(parsed.canvasEditor),
       importedMetadata: parsed.importedMetadata ?? null,
       savedSettings: parsed.savedSettings || { send: [], query: [], post: [] },
     };
@@ -117,6 +119,52 @@ function normalizeSavedSettings(savedSettings) {
   };
 }
 
+function cloneCanvasEditorSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  return {
+    mode: snapshot.mode || "inpaint",
+    prompt: snapshot.prompt || "",
+    negativePrompt: snapshot.negativePrompt || "",
+    width: castNumber(snapshot.width, 1024),
+    height: castNumber(snapshot.height, 768),
+    steps: castNumber(snapshot.steps, 25),
+    cfgScale: castNumber(snapshot.cfgScale, 5),
+    seed: String(snapshot.seed || "-1"),
+    denoisingStrength: castNumber(snapshot.denoisingStrength, 0.51),
+    modelId: String(snapshot.modelId || ""),
+    modelFileId: String(snapshot.modelFileId || ""),
+    brushSize: castNumber(snapshot.brushSize, 28),
+    brushOpacity: castNumber(snapshot.brushOpacity, 70),
+    color: snapshot.color || "#d9480f",
+    layer: snapshot.layer === "mask" ? "mask" : "paint",
+    tool: ["move", "brush", "eraser"].includes(snapshot.tool) ? snapshot.tool : "move",
+    transform: {
+      x: castNumber(snapshot.transform?.x, 512),
+      y: castNumber(snapshot.transform?.y, 384),
+      scale: castNumber(snapshot.transform?.scale, 1),
+      rotation: castNumber(snapshot.transform?.rotation, 0),
+    },
+    imageDataUrl: snapshot.imageDataUrl || "",
+    sourceImageUrl: snapshot.sourceImageUrl || "",
+    sourceMaskUrl: snapshot.sourceMaskUrl || "",
+    maskDataUrl: snapshot.maskDataUrl || "",
+    imageId: snapshot.imageId || "",
+    taskId: snapshot.taskId || "",
+    ksamplerName: snapshot.ksamplerName || "euler_ancestral",
+    schedule: snapshot.schedule || "normal",
+    activeLayerId: snapshot.activeLayerId || "",
+    layerCounter: castNumber(snapshot.layerCounter, 1),
+    layers: Array.isArray(snapshot.layers)
+      ? snapshot.layers.map((layer, index) => ({
+        id: layer.id || `layer-${index + 1}`,
+        name: layer.name || `Layer ${index + 1}`,
+        visible: layer.visible !== false,
+        dataUrl: layer.dataUrl || "",
+      }))
+      : [],
+  };
+}
+
 function buildSnapshotData(source) {
   return {
     send: cloneRequestDraft(source.send),
@@ -128,6 +176,7 @@ function buildSnapshotData(source) {
     galleryItems: Array.isArray(source.galleryItems) ? JSON.parse(JSON.stringify(source.galleryItems)) : [],
     queryResultCopySeed: Boolean(source.queryResultCopySeed),
     canvasImport: source.canvasImport ?? null,
+    canvasEditor: cloneCanvasEditorSnapshot(source.canvasEditor),
     importedMetadata: source.importedMetadata ?? null,
     savedSettings: normalizeSavedSettings(source.savedSettings),
   };
@@ -189,6 +238,7 @@ async function importStorageSnapshot(event) {
     state.galleryItems = incoming.galleryItems;
     state.queryResultCopySeed = incoming.queryResultCopySeed;
     state.canvasImport = incoming.canvasImport;
+    state.canvasEditor = incoming.canvasEditor;
     state.importedMetadata = incoming.importedMetadata;
     state.savedSettings = incoming.savedSettings;
     saveState();
@@ -526,7 +576,11 @@ function initCanvasPage() {
   bindCanvasPresignSection(presign);
 
   const editor = createCanvasEditor(dom.canvas, dom);
+  if (["localhost", "127.0.0.1"].includes(location.hostname)) {
+    globalThis.__canvasEditorForTest = editor;
+  }
   hydrateCanvasStoredRequest(editor, dom);
+  hydrateCanvasStoredEditor(editor, dom);
   renderCanvasEditor(editor);
   applyCanvasImport(editor, dom);
   if (state.canvasImport || !state.canvasRequest.bodyText.trim()) {
@@ -534,8 +588,14 @@ function initCanvasPage() {
   }
 
   dom.file.addEventListener("change", (event) => loadCanvasBaseImage(event, editor, dom));
-  dom.mode.addEventListener("change", () => updateCanvasBodyPreview(editor, dom));
-  dom.build.addEventListener("click", () => updateCanvasBodyPreview(editor, dom, { force: true }));
+  dom.mode.addEventListener("change", () => {
+    updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
+  });
+  dom.build.addEventListener("click", () => {
+    updateCanvasBodyPreview(editor, dom, { force: true });
+    persistCanvasEditorState(editor, dom);
+  });
   dom.inpaintParse?.addEventListener("click", () => parseCanvasPowerShellRequest(editor, dom));
   dom.inpaintPowerShell?.addEventListener("input", () => {
     state.canvasRequest = {
@@ -563,12 +623,14 @@ function initCanvasPage() {
     editor.sourceMaskUrl = "";
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
   });
   dom.clearPaint.addEventListener("click", () => {
     const active = getActiveLayer(editor);
     active.ctx.clearRect(0, 0, active.canvas.width, active.canvas.height);
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
   });
 
   dom.toolButtons.forEach((button) => {
@@ -585,6 +647,7 @@ function initCanvasPage() {
         }
       }
       renderCanvasEditor(editor);
+      persistCanvasEditorState(editor, dom);
     });
   });
 
@@ -600,17 +663,20 @@ function initCanvasPage() {
   if (dom.brushSize && dom.brushSizeVal) {
     const updateSize = () => { dom.brushSizeVal.textContent = dom.brushSize.value; };
     dom.brushSize.addEventListener("input", updateSize);
+    dom.brushSize.addEventListener("change", () => persistCanvasEditorState(editor, dom));
     updateSize();
   }
   if (dom.brushOpacity && dom.brushOpacityVal) {
     const updateOpacity = () => { dom.brushOpacityVal.textContent = dom.brushOpacity.value; };
     dom.brushOpacity.addEventListener("input", updateOpacity);
+    dom.brushOpacity.addEventListener("change", () => persistCanvasEditorState(editor, dom));
     updateOpacity();
   }
 
   if (dom.pick) {
     dom.pick.addEventListener("click", () => runColorPicker(dom));
   }
+  dom.color?.addEventListener("input", () => persistCanvasEditorState(editor, dom));
 
   const applyLayerMode = () => {
     const toolbarEl = document.querySelector(".canvas-toolbar");
@@ -632,6 +698,7 @@ function initCanvasPage() {
       dom.layerButtons.forEach((item) => item.classList.toggle("is-active", item === button));
       applyLayerMode();
       renderCanvasEditor(editor);
+      persistCanvasEditorState(editor, dom);
     });
   });
   applyLayerMode();
@@ -647,6 +714,7 @@ function initCanvasPage() {
       renderLayerPanel(editor, dom);
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
     });
     dom.layerRemove?.addEventListener("click", () => {
       if (editor.layers.length <= 1) {
@@ -660,6 +728,7 @@ function initCanvasPage() {
       renderLayerPanel(editor, dom);
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
     });
     dom.layerUp?.addEventListener("click", () => moveActiveLayer(editor, dom, 1));
     dom.layerDown?.addEventListener("click", () => moveActiveLayer(editor, dom, -1));
@@ -672,6 +741,7 @@ function initCanvasPage() {
       editor.transform.scale = Number(dom.scale.value) / 100;
       editor.transform.rotation = Number(dom.rotation.value);
       renderCanvasEditor(editor);
+      persistCanvasEditorState(editor, dom);
     });
   });
 
@@ -685,13 +755,17 @@ function initCanvasPage() {
     dom.modelId,
     dom.modelFileId,
   ].forEach((input) => {
-    input.addEventListener("input", () => updateCanvasBodyPreview(editor, dom));
+    input.addEventListener("input", () => {
+      updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
+    });
   });
 
   [dom.width, dom.height].forEach((input) => {
     input.addEventListener("input", () => {
       resizeCanvasEditor(editor, dom);
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
     });
   });
 
@@ -707,6 +781,7 @@ function initCanvasPage() {
   const endPointer = () => {
     if (editor.pointer && editor.pointer.mode !== "stroke") {
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
     }
     editor.pointer = null;
     dom.canvas.style.cursor = "";
@@ -1792,6 +1867,7 @@ function parseCanvasPowerShellRequest(editor, dom) {
     }
     resizeCanvasEditor(editor, dom);
     renderCanvasEditor(editor);
+    persistCanvasEditorState(editor, dom);
     dom.stats.textContent = "已解析 Inpaint PowerShell，origin 已從 headers 移除。";
   } catch (error) {
     dom.stats.textContent = `Inpaint 解析失敗: ${error.message}`;
@@ -2059,6 +2135,154 @@ function createCanvasEditor(canvas, dom) {
   };
 }
 
+function buildCanvasEditorSnapshot(editor, dom) {
+  return cloneCanvasEditorSnapshot({
+    mode: dom.mode.value,
+    prompt: dom.prompt.value,
+    negativePrompt: dom.negativePrompt.value,
+    width: editor.canvas.width,
+    height: editor.canvas.height,
+    steps: dom.steps.value,
+    cfgScale: dom.cfgScale.value,
+    seed: dom.seed.value,
+    denoisingStrength: dom.denoisingStrength.value,
+    modelId: dom.modelId.value,
+    modelFileId: dom.modelFileId.value,
+    brushSize: dom.brushSize?.value,
+    brushOpacity: dom.brushOpacity?.value,
+    color: dom.color?.value,
+    layer: editor.layer,
+    tool: editor.tool,
+    transform: editor.transform,
+    imageDataUrl: editor.imageDataUrl,
+    sourceImageUrl: editor.sourceImageUrl,
+    sourceMaskUrl: editor.sourceMaskUrl,
+    maskDataUrl: isCanvasBlank(editor.maskCanvas) ? "" : editor.maskCanvas.toDataURL("image/png"),
+    imageId: editor.imageId,
+    taskId: editor.taskId,
+    ksamplerName: editor.ksamplerName,
+    schedule: editor.schedule,
+    activeLayerId: editor.activeLayerId,
+    layerCounter: editor.layerCounter,
+    layers: editor.layers.map((layer) => ({
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      dataUrl: isCanvasBlank(layer.canvas) ? "" : layer.canvas.toDataURL("image/png"),
+    })),
+  });
+}
+
+function persistCanvasEditorState(editor, dom) {
+  state.canvasEditor = buildCanvasEditorSnapshot(editor, dom);
+  saveState();
+}
+
+function hydrateCanvasStoredEditor(editor, dom) {
+  const snapshot = cloneCanvasEditorSnapshot(state.canvasEditor);
+  if (!snapshot) return;
+
+  dom.mode.value = snapshot.mode;
+  dom.prompt.value = snapshot.prompt;
+  dom.negativePrompt.value = snapshot.negativePrompt;
+  dom.width.value = String(snapshot.width);
+  dom.height.value = String(snapshot.height);
+  dom.steps.value = String(snapshot.steps);
+  dom.cfgScale.value = String(snapshot.cfgScale);
+  dom.seed.value = snapshot.seed;
+  dom.denoisingStrength.value = String(snapshot.denoisingStrength);
+  dom.modelId.value = snapshot.modelId;
+  dom.modelFileId.value = snapshot.modelFileId;
+  if (dom.brushSize) dom.brushSize.value = String(snapshot.brushSize);
+  if (dom.brushOpacity) dom.brushOpacity.value = String(snapshot.brushOpacity);
+  if (dom.color) dom.color.value = snapshot.color;
+
+  resizeCanvasEditor(editor, dom);
+  editor.layer = snapshot.layer;
+  editor.tool = snapshot.tool;
+  editor.transform = snapshot.transform;
+  editor.imageDataUrl = snapshot.imageDataUrl;
+  editor.sourceImageUrl = snapshot.sourceImageUrl;
+  editor.sourceMaskUrl = snapshot.sourceMaskUrl;
+  editor.imageId = snapshot.imageId;
+  editor.taskId = snapshot.taskId;
+  editor.ksamplerName = snapshot.ksamplerName;
+  editor.schedule = snapshot.schedule;
+  editor.layerCounter = Math.max(1, snapshot.layerCounter);
+
+  if (snapshot.layers.length) {
+    editor.layers = snapshot.layers.map((layer) => {
+      const restored = createPaintLayer(layer.name, editor.canvas.width, editor.canvas.height);
+      restored.id = layer.id;
+      restored.visible = layer.visible;
+      loadDataUrlIntoCanvas(layer.dataUrl, restored.canvas, () => {
+        renderCanvasEditor(editor);
+      });
+      return restored;
+    });
+    editor.activeLayerId = snapshot.layers.some((layer) => layer.id === snapshot.activeLayerId)
+      ? snapshot.activeLayerId
+      : editor.layers[0].id;
+  }
+
+  loadDataUrlIntoCanvas(snapshot.maskDataUrl, editor.maskCanvas, () => {
+    renderCanvasEditor(editor);
+  });
+  loadCanvasSnapshotBaseImage(snapshot.imageDataUrl || snapshot.sourceImageUrl, editor, dom);
+  syncCanvasTransformInputs(editor, dom);
+  syncCanvasEditorControls(editor, dom);
+}
+
+function loadDataUrlIntoCanvas(dataUrl, canvas, onLoad) {
+  if (!dataUrl) return;
+  const image = new Image();
+  image.onload = () => {
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    onLoad?.();
+  };
+  image.src = dataUrl;
+}
+
+function loadCanvasSnapshotBaseImage(url, editor, dom) {
+  if (!url) return;
+  const attempts = url.startsWith("data:") ? [{ url, crossOrigin: "" }] : createCanvasImageLoadAttempts(url);
+  let index = 0;
+
+  const tryLoad = () => {
+    const attempt = attempts[index];
+    if (!attempt) return;
+    const image = new Image();
+    if (attempt.crossOrigin) {
+      image.crossOrigin = attempt.crossOrigin;
+    }
+    image.onload = () => {
+      editor.baseImage = image;
+      renderCanvasEditor(editor);
+      fitCanvasDisplay(editor);
+    };
+    image.onerror = () => {
+      index += 1;
+      tryLoad();
+    };
+    image.src = attempt.url;
+  };
+
+  tryLoad();
+}
+
+function syncCanvasEditorControls(editor, dom) {
+  dom.toolButtons?.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.canvasTool === editor.tool);
+  });
+  dom.layerButtons?.forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.canvasLayer === editor.layer);
+  });
+  if (dom.brushSizeVal && dom.brushSize) dom.brushSizeVal.textContent = dom.brushSize.value;
+  if (dom.brushOpacityVal && dom.brushOpacity) dom.brushOpacityVal.textContent = dom.brushOpacity.value;
+}
+
 function createPaintLayer(name, width, height) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -2085,6 +2309,7 @@ function moveActiveLayer(editor, dom, delta) {
   renderLayerPanel(editor, dom);
   renderCanvasEditor(editor);
   updateCanvasBodyPreview(editor, dom);
+  persistCanvasEditorState(editor, dom);
 }
 
 function renderLayerPanel(editor, dom) {
@@ -2108,6 +2333,7 @@ function renderLayerPanel(editor, dom) {
       renderLayerPanel(editor, dom);
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
     });
 
     const name = document.createElement("input");
@@ -2127,6 +2353,7 @@ function renderLayerPanel(editor, dom) {
       if (layer.id === editor.activeLayerId && dom.activeLayerName) {
         dom.activeLayerName.textContent = layer.name;
       }
+      persistCanvasEditorState(editor, dom);
     });
     name.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
@@ -2141,6 +2368,7 @@ function renderLayerPanel(editor, dom) {
     li.addEventListener("click", () => {
       editor.activeLayerId = layer.id;
       renderLayerPanel(editor, dom);
+      persistCanvasEditorState(editor, dom);
     });
 
     li.append(vis, name);
@@ -2168,6 +2396,7 @@ function loadCanvasBaseImage(event, editor, dom) {
       adoptCanvasImageDimensions(editor, dom, image, { matchSize: true });
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
       dom.stats.textContent = `已載入本地圖片：${file.name}（畫布同步為 ${image.width}×${image.height}）`;
     };
     image.src = String(reader.result || "");
@@ -2225,6 +2454,7 @@ function applyCanvasImport(editor, dom) {
   if (incoming.imageUrl) {
     loadCanvasImageUrlWithFallback(incoming.imageUrl, editor, dom);
   }
+  persistCanvasEditorState(editor, dom);
 
   dom.stats.textContent = incoming.mode === "inpaint"
     ? "已從 Query Results 帶入 Inpaint。"
@@ -2247,17 +2477,20 @@ function loadCanvasImageUrlWithFallback(url, editor, dom) {
         adoptCanvasImageDimensions(editor, dom, image, { matchSize: !editor.importHadDims });
         renderCanvasEditor(editor);
         updateCanvasBodyPreview(editor, dom);
+        persistCanvasEditorState(editor, dom);
         dom.stats.textContent = "Image loaded via fetch fallback (mask + edits export to dataURL).";
       };
       image.onerror = () => {
         URL.revokeObjectURL(objectUrl);
         dom.stats.textContent = "Image could not be loaded. The API body will keep the original image URL.";
         updateCanvasBodyPreview(editor, dom);
+        persistCanvasEditorState(editor, dom);
       };
       image.src = objectUrl;
     } catch (error) {
       dom.stats.textContent = `Image could not be loaded (${error.message}). The API body will keep the original image URL.`;
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
     }
   };
 
@@ -2278,6 +2511,7 @@ function loadCanvasImageUrlWithFallback(url, editor, dom) {
       adoptCanvasImageDimensions(editor, dom, image, { matchSize: !editor.importHadDims });
       renderCanvasEditor(editor);
       updateCanvasBodyPreview(editor, dom);
+      persistCanvasEditorState(editor, dom);
       if (!attempt.crossOrigin) {
         dom.stats.textContent = "Image loaded for editing preview. Export will keep the original image URL because CORS is blocked.";
       }
@@ -2309,10 +2543,12 @@ function loadCanvasImageUrl(url, editor, dom) {
     adoptCanvasImageDimensions(editor, dom, image, { matchSize: !editor.importHadDims });
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
   };
   image.onerror = () => {
     dom.stats.textContent = "圖片連結無法載入到畫布，Body 仍會使用原圖 URL。";
     updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
   };
   image.src = url;
 }
@@ -2324,6 +2560,7 @@ function runColorPicker(dom) {
     new window.EyeDropper().open()
       .then((result) => {
         dom.color.value = result.sRGBHex;
+        dom.color.dispatchEvent(new Event("input", { bubbles: true }));
         dom.stats.textContent = `Picked ${result.sRGBHex}`;
       })
       .catch(() => {
@@ -2370,6 +2607,7 @@ function handleCanvasPointerDown(event, editor, dom) {
     drawCanvasStroke(point, point, editor, dom);
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
   }
 }
 
@@ -2424,6 +2662,7 @@ function handleCanvasPointerMove(event, editor, dom) {
     editor.pointer = { ...p, x: point.x, y: point.y };
     renderCanvasEditor(editor);
     updateCanvasBodyPreview(editor, dom);
+    persistCanvasEditorState(editor, dom);
   }
 }
 
