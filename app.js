@@ -12,6 +12,10 @@ const FORBIDDEN_HEADERS = new Set([
   "method",
   "origin",
   "path",
+  // Not in api.tensor.art's Access-Control-Allow-Headers, so sending it makes
+  // the CORS preflight fail with an opaque "Failed to fetch". The browser
+  // handles caching itself, so dropping it does not change the request.
+  "pragma",
   "priority",
   "referer",
   "scheme",
@@ -1085,7 +1089,7 @@ async function submitRequestSection(key, section, updateGallery) {
     }
     return response.status;
   } catch (error) {
-    setResponse(key, `Request 失敗: ${error.message}`);
+    setResponse(key, `Request 失敗: ${error.message}${describeFetchFailure(error)}`);
     renderRequestSection(key, section);
     section.responseFold.open = true;
     section.responseFold.dataset.responseView = "preview";
@@ -1474,6 +1478,21 @@ function parseHeaderBlock(block) {
     i = eqPos + 1 + afterEq.indexOf('"') + 1 + valLiteral.value.length + 1;
   }
   return headers;
+}
+
+// A CORS preflight rejection reaches JS only as an opaque "Failed to fetch", with
+// the real reason confined to the devtools console. Point at the usual cause so the
+// failure is not mistaken for an expired token or a changed endpoint.
+function describeFetchFailure(error) {
+  if (!/failed to fetch|networkerror/i.test(error?.message || "")) return "";
+  return [
+    "",
+    "",
+    "可能原因：",
+    "1. CORS preflight 被擋：headers 含 api.tensor.art 不允許的欄位（例如 pragma）。",
+    "   請開 DevTools Console 看 'not allowed by Access-Control-Allow-Headers' 的欄位名，並從 Headers 移除。",
+    "2. x-request-sign 已失效：請從瀏覽器重新擷取一次請求再貼上解析。",
+  ].join("\n");
 }
 
 function sanitizeHeaders(headers) {
@@ -1978,7 +1997,7 @@ async function sendCanvasRequest(editor, dom) {
     dom.response.textContent = `HTTP ${response.status}\n${formatResponse(text)}\n\n--- 送出的 URL 欄位 ---\n${JSON.stringify(summary, null, 2)}`;
     dom.stats.textContent = `已送出 (HTTP ${response.status})`;
   } catch (error) {
-    dom.response.textContent = `Request 失敗: ${error.message}\n\nCORS 提示：\n- Canvas Send 只使用 Canvas 自己解析出的 request，不會讀取或覆蓋 API 1\n- 若瀏覽器仍擋 api.tensor.art，請確認 CORS/OPTIONS preflight 是否已放行`;
+    dom.response.textContent = `Request 失敗: ${error.message}${describeFetchFailure(error)}`;
     dom.stats.textContent = `送出失敗: ${error.message}`;
   } finally {
     dom.send.disabled = false;

@@ -76,6 +76,24 @@ assert.deepEqual(plain(sanitizeHeaders({
   "x-request-sign": "sig-1",
 });
 
+// Regression: "pragma" is absent from api.tensor.art's Access-Control-Allow-Headers,
+// so forwarding it from a pasted PowerShell request fails the CORS preflight and
+// surfaces only as "Failed to fetch". Verified against the live API: the identical
+// request succeeds with HTTP 200 once pragma is dropped. The sign headers, which the
+// API does require, must survive.
+assert.deepEqual(plain(sanitizeHeaders({
+  pragma: "no-cache",
+  "cache-control": "no-cache",
+  "x-request-sign": "sig-1",
+  "x-request-timestamp": "1788574461295",
+  "x-request-package-id": "3000",
+})), {
+  "cache-control": "no-cache",
+  "x-request-sign": "sig-1",
+  "x-request-timestamp": "1788574461295",
+  "x-request-package-id": "3000",
+});
+
 const parsedRequest = parsePowerShellRequest(`
 Invoke-WebRequest -Uri "https://api.tensor.art/works/v1/works/tasks/query" \`
   -Method "POST" \`
