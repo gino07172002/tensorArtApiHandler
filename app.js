@@ -1969,6 +1969,27 @@ async function sendCanvasRequest(editor, dom) {
     }
     const payload = JSON.parse(bodyText);
 
+    // The API only accepts hosted image URLs: a data: URL comes back as
+    // HTTP 400 {"code":2,"message":"unknown image url of host: "}. Uploading a
+    // painted mask needs pre_sign + an R2 PUT, and that bucket answers
+    // OPTIONS with "CORS not configured for this bucket", so the upload hop is
+    // impossible from this origin. Say so up front instead of spending the request.
+    const maskValue = payload.params?.inpaint?.maskImage || "";
+    if (maskValue.startsWith("data:")) {
+      dom.response.textContent = [
+        "未送出：mask 是自己畫的 (data: URL)，API 只收 hosted URL。",
+        "",
+        "API 會回 HTTP 400 {\"code\":2,\"message\":\"unknown image url of host: \"}。",
+        "上傳畫好的 mask 需要 pre_sign + R2 PUT，但該 bucket 回",
+        "「CORS not configured for this bucket」，所以無法從這個網域上傳。",
+        "",
+        "可行做法：改用已存在的 mask URL（解析進來的那個），",
+        "或改跑在 tensor.art 同源的 userscript 版本。",
+      ].join("\n");
+      dom.stats.textContent = "未送出：mask 需要 hosted URL";
+      return;
+    }
+
     state.canvasRequest = {
       ...blankRequestState(),
       ...canvasRequest,
@@ -2004,8 +2025,10 @@ async function sendCanvasRequest(editor, dom) {
   }
 }
 
-// Reserved for the Tampermonkey/same-origin build — GitHub Pages can't hit
-// pre_sign or R2 due to CORS. Keep ready for when we ship a userscript wrapper.
+// Reserved for the Tampermonkey/same-origin build. pre_sign itself DOES work from
+// GitHub Pages (it allows this origin), but the R2 PUT that follows does not: the
+// bucket answers OPTIONS with 403 "CORS not configured for this bucket". So the
+// upload hop only works same-origin. Keep ready for the userscript wrapper.
 async function uploadMaskToTensor(editor, baseHeaders) {
   const maskBlob = await renderMaskAsJpegBlob(editor);
 
